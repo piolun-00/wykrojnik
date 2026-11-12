@@ -39,6 +39,15 @@ ok('zamek zakładki, przesunięcia punktów i kolizje', () => {
   box.ov = {}; box.panels.push({ id: 99, kind: 'wall', parent: 6, edge: 'b', ext: { base: 'num', val: 30, kt: 0 } });
   assert.ok(Object.keys(C.buildBox(box).clash).length >= 2);
 });
+ok('obrys bez wiszących nacięć (odcinków tam i z powrotem)', () => {
+  for (const tt of [0.5, 2, 10]) for (const tp of ['tuck', 'mailer', 'tray', 'sleeve']) {
+    const r = C.buildBox({ P: { S: 60, W: 100, G: 40, t: tt, fold: 'crease' }, panels: C.boxTemplate(tp) });
+    r.paths.filter(p => p.type === 'cut' && p.closed).forEach(p => { const a = p.pts, n = a.length;
+      for (let i = 0; i < n; i++) { const pv = a[(i - 1 + n) % n], q = a[i], nx = a[(i + 1) % n]; if (q.c1x !== undefined || nx.c1x !== undefined) continue;
+        const ax = q.x - pv.x, ay = q.y - pv.y, bx = nx.x - q.x, by = nx.y - q.y, la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+        assert.ok(!(la > 1e-6 && lb > 1e-6 && Math.abs(ax * by - ay * bx) < 1e-6 * la * lb && ax * bx + ay * by < 0), tp + ' t=' + tt + ' wąs przy ' + q.x + ',' + q.y); } });
+  }
+});
 ok('DXF, PDF i SVG: zapis i odczyt', () => {
   const S = C.samplePaths(); S.forEach((p, i) => p.id = i + 1);
   const cfg = { W: 1010, H: 720, m: 12, gap: 3, max: 0, rot: 'auto', corner: 'tl', mk: 5 }, L = C.layoutSheet(S, cfg);
@@ -108,6 +117,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     key('c', { ctrlKey: true }); key('v', { ctrlKey: true }); key('d', { ctrlKey: true }); assert.strictEqual(d.querySelectorAll('.hit').length, 6);
     pe(cv, 'pointerdown', 2400, 600); pe(cv, 'pointermove', 1000, 100); pe(cv, 'pointerup', 1000, 100); await wait(40);
     d.querySelector('[data-al=dh]').click(); d.querySelector('[data-al=t]').click();
+  });
+  await oka('wzorzec wyrównania: drugi klik w zaznaczony element albo ściankę', async () => {
+    key('Escape'); const hs = () => [...d.querySelectorAll('.hit')], bx = el => el.getAttribute('d').match(/^M(-?[\d.]+) (-?[\d.]+)/).slice(1).map(Number);
+    pe(hs()[1], 'pointerdown', 0, 0); pe(cv, 'pointerup', 0, 0); pe(hs()[2], 'pointerdown', 0, 0, { shiftKey: true }); pe(cv, 'pointerup', 0, 0, { shiftKey: true });
+    pe(hs()[1], 'pointerdown', 0, 0); pe(cv, 'pointerup', 0, 0); assert.ok(g('info').textContent.includes('wzorzec: linia')); assert.strictEqual(d.querySelectorAll('.hit.key').length, 1);
+    const keyBefore = hs()[1].getAttribute('d'); d.querySelector('[data-al=t]').click(); assert.strictEqual(hs()[1].getAttribute('d'), keyBefore, 'wzorzec stoi w miejscu');
+    key('Escape'); pe(hs()[1], 'pointerdown', 0, 0); pe(cv, 'pointerup', 0, 0); click(60, 60, { shiftKey: true }); assert.ok(g('info').textContent.includes('ścianka'));
+    const before = hs()[1].getAttribute('d'); d.querySelector('[data-al=l]').click(); await wait(20); assert.notStrictEqual(hs()[1].getAttribute('d'), before, 'kształt dosuwa się do ścianki');
+    click(60, 60); assert.ok(g('info').textContent.includes('wzorzec: ścianka')); key('Escape');
   });
   await oka('punkty linii: łuk, uchwyty, dodanie i usunięcie punktu', async () => {
     key('Escape'); const h0 = d.querySelector('.hit'); h0.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, clientX: 60, clientY: 100 }));

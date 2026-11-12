@@ -133,3 +133,5 @@ button{cursor:pointer}
 .hd{fill:var(--panel);stroke:var(--fg);stroke-width:1;cursor:move}
 .hl{stroke:var(--muted);stroke-width:1}
 @media (max-width:1000px){.app.has--banner{grid-template-rows:auto 52px auto 62vh;grid-template-areas:"banner" "top" "panel" "preview"}}
+.hit.key{stroke-opacity:.55;stroke-width:11}
+.psel.key{fill-opacity:.12;stroke:var(--fg);stroke-width:2;vector-effect:non-scaling-stroke}

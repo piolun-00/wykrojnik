@@ -153,6 +153,19 @@ function splitAt(p,i,t){
   if(i===0){a.push(q);return a.length-1;}
   a.splice(i,0,q);return i;
 }
+/* usuwa „wąsy”: miejsca, gdzie obrys idzie odcinkiem tam i z powrotem po tej samej linii (zostaje po nich wiszące nacięcie) */
+function removeSpikes(p){
+  var a=p.pts,changed=true,guard=0;
+  while(changed&&a.length>2&&guard++<1000){changed=false;var n=a.length;
+    for(var i=0;i<n;i++){
+      if(!p.closed&&(i===0||i===n-1))continue;
+      var pv=a[(i-1+n)%n],q=a[i],nx=a[(i+1)%n];if(hasC(q)||hasC(nx))continue;
+      var ax=q.x-pv.x,ay=q.y-pv.y,bx=nx.x-q.x,by=nx.y-q.y,la=Math.hypot(ax,ay),lb=Math.hypot(bx,by);
+      if(la<1e-6){a.splice(i,1);changed=true;break;}
+      if(lb<1e-6)continue;
+      if(Math.abs(ax*by-ay*bx)<1e-6*la*lb&&ax*bx+ay*by<0){a.splice(i,1);changed=true;break;}}}
+  return p;
+}
 function reversePath(p){
   var a=p.pts,n=a.length,r=[];
   for(var i=n-1;i>=0;i--){var o={x:a[i].x,y:a[i].y};if(a[i].k)o.k=a[i].k;r.push(o);}
@@ -511,6 +524,7 @@ function buildBox(box){
   out.paths.forEach(function(p,i){p.id=i+1;});
   var cuts=out.paths.filter(function(p){return p.type==='cut'&&slits.indexOf(p)<0;}),j=joinPaths(cuts,0.01);
   out.paths=out.paths.filter(function(p){return !j.gone[p.id];});
+  cuts.forEach(function(p){if(!j.gone[p.id])removeSpikes(p);});
   out.paths.forEach(function(p){p.pts.forEach(function(q){q.ks=loc[Math.round(q.x*1000)+','+Math.round(q.y*1000)]||[q.k];});});
   /* kolizje: ścianki, które nie są rodzicem i dzieckiem, a nachodzą na siebie */
   var ids=Object.keys(out.polys),par={};box.panels.forEach(function(p){par[p.id]=p.parent;});
@@ -519,4 +533,4 @@ function buildBox(box){
   return out;
 }
 function pointInPoly(pl,x,y){var c=false;for(var i=0,j=pl.length-1;i<pl.length;j=i++){var a=pl[i],b=pl[j];if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c;}return c;}
-if(typeof module!=='undefined')module.exports={nearestOnPath:nearestOnPath,polysOverlap:polysOverlap,moveNode:moveNode,movePath:movePath,boxTemplate:boxTemplate,buildBox:buildBox,exprVal:exprVal,pointInPoly:pointInPoly,axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
+if(typeof module!=='undefined')module.exports={removeSpikes:removeSpikes,nearestOnPath:nearestOnPath,polysOverlap:polysOverlap,moveNode:moveNode,movePath:movePath,boxTemplate:boxTemplate,buildBox:buildBox,exprVal:exprVal,pointInPoly:pointInPoly,axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
