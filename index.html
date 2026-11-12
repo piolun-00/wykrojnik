@@ -668,10 +668,14 @@ function buildBox(box){
   function edge(p,key,F){
     var ch=kids[p.id+':'+key];
     if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)]);var m=pt(F,F.len/2,0);out.plus.push({id:p.id,edge:key,x:m.x,y:m.y,nx:F.n.x,ny:F.n.y});return;}
-    emit('crease',[pt(F,0,0),pt(F,F.len,0)]);place(ch,F);
+    /* klapki odsuwają się od krawędzi o wielokrotność grubości materiału — inaczej przy grubym kartonie klinują się przy składaniu */
+    var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
+    if(ins>0.001){emit('cut',[pt(F,0,0),pt(F,ins,0)]);emit('crease',[pt(F,ins,0),pt(F,F.len-ins,0)]);emit('cut',[pt(F,F.len-ins,0),pt(F,F.len,0)]);}
+    else emit('crease',[pt(F,0,0),pt(F,F.len,0)]);
+    place(ch,F,ins);
   }
-  function place(p,F){
-    var ext=exprVal(p.ext,P),len=F.len,c;
+  function place(p,F,ins){
+    var ext=exprVal(p.ext,P),len=F.len,c,L0=ins||0,L1=len-(ins||0);
     if(p.kind==='wall'){
       out.frames[p.id]={nx:F.n.x,ny:F.n.y,pos:F.O.x*Math.abs(F.n.x)+F.O.y*Math.abs(F.n.y)};
       out.polys[p.id]=[pt(F,0,0),pt(F,0,ext),pt(F,len,ext),pt(F,len,0)];
@@ -680,12 +684,12 @@ function buildBox(box){
       edge(p,'o',{O:pt(F,0,ext),u:F.u,n:F.n,len:len});
       edge(p,'b',{O:pt(F,len,0),u:F.n,n:F.u,len:ext});
     }else if(p.kind==='tuck'){
-      var r=Math.min(ext*0.6,len*0.25),k=0.5523*r,q=function(a,b){return pt(F,a,b);},A=q(r,ext),B=q(len,ext-r),a1=q(0,ext-r+k),a2=q(r-k,ext),b1=q(len-r+k,ext),b2=q(len,ext-r+k);
-      emit('cut',[q(0,0),q(0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(len-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(len,0)]);
-      out.polys[p.id]=[q(0,0),q(0,ext),q(len,ext),q(len,0)];
+      var r=Math.min(ext*0.6,(L1-L0)*0.25),k=0.5523*r,q=function(a,b){return pt(F,a,b);},A=q(L0+r,ext),B=q(L1,ext-r),a1=q(L0,ext-r+k),a2=q(L0+r-k,ext),b1=q(L1-r+k,ext),b2=q(L1,ext-r+k);
+      emit('cut',[q(L0,0),q(L0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(L1-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(L1,0)]);
+      out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
     }else{
-      c=Math.min(ext*(p.kind==='glue'?0.5:0.3),len*0.25);
-      var pl=[pt(F,0,0),pt(F,c,ext),pt(F,len-c,ext),pt(F,len,0)];emit('cut',pl.map(function(q){return {x:q.x,y:q.y};}));out.polys[p.id]=pl;
+      c=Math.min(ext*(p.kind==='glue'?0.5:0.3),(L1-L0)*0.25);
+      var pl=[pt(F,L0,0),pt(F,L0+c,ext),pt(F,L1-c,ext),pt(F,L1,0)];emit('cut',pl.map(function(q){return {x:q.x,y:q.y};}));out.polys[p.id]=pl;
     }
   }
   var w=exprVal(root.w,P),h=exprVal(root.h,P);
@@ -741,6 +745,7 @@ function renderPanelCard(){
   if(p.parent==null)h+=dimRow(p,'w','Szerokość ścianki')+dimRow(p,'h','Wysokość ścianki');
   else{h+='<div class="f"><span class="f__label">Rodzaj</span><div class="chips" id="kinds">'+Object.keys(KIND).map(function(k){return '<button type="button" data-setkind="'+k+'" aria-pressed="'+(p.kind===k)+'">'+KIND[k]+'</button>';}).join('')+'</div></div>';
     h+=dimRow(p,'ext',p.kind==='wall'?'Wymiar ścianki':'Szerokość');
+    if(p.kind!=='wall'){var gk=p.gap&&p.gap.kt!=null?p.gap.kt:1;h+='<div class="f"><span class="f__label">Odstęp od krawędzi<span class="pv">= '+n1(gk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2,3].map(function(n){return '<button type="button" data-gap="'+n+'" aria-pressed="'+(gk===n)+'">'+(n?n+' × grubość':'bez odstępu')+'</button>';}).join('')+'</div></div>';}
     h+='<button class="btn is--danger" type="button" id="pDel">Usuń '+(p.kind==='wall'?'ściankę i wszystko za nią':'ten element')+'</button>';}
   box.innerHTML=h;$('subWall').textContent=p.parent==null?'pierwsza':KIND[p.kind].toLowerCase();updatePv();
 }
@@ -752,7 +757,8 @@ $('pcard').addEventListener('input',function(e){var t=e.target;if(t.tagName!=='I
 $('pcard').addEventListener('change',function(e){var t=e.target;if(t.tagName!=='SELECT')return;var p=panel(S.selP);if(!p)return;pushUndo();var ex=exprOf(p,t.dataset.k);
   if(t.value==='num'){ex.val=Math.round(exprVal({base:ex.base,val:ex.val,mul:ex.mul,kt:0},S.box.P)*100)/100;}ex.base=t.value;delete ex.mul;boxChanged(true);});
 $('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP):null;if(!p)return;var b=e.target.closest('button');if(!b)return;
-  if(b.dataset.kt!==undefined){pushUndo();exprOf(p,b.parentNode.dataset.k).kt=+b.dataset.kt;boxChanged(true);}
+  if(b.dataset.gap!==undefined){pushUndo();p.gap={kt:+b.dataset.gap};boxChanged(true);}
+  else if(b.dataset.kt!==undefined){pushUndo();exprOf(p,b.parentNode.dataset.k).kt=+b.dataset.kt;boxChanged(true);}
   else if(b.dataset.setkind){var k=b.dataset.setkind;if(k===p.kind)return;pushUndo();
     if(k!=='wall')removeKids(p.id);p.kind=k;p.ext=defExt(k,panel(p.parent),null);boxChanged(true);}
   else if(b.id==='pDel')delPanel();});
@@ -1098,7 +1104,7 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.6';$('ver').textContent='v'+VERSION;
+var VERSION='2026.11.12.7';$('ver').textContent='v'+VERSION;
 var latest='';
 function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
 function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
