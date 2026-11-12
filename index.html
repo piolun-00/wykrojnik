@@ -3,215 +3,196 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Edytor wykrojników 2D</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<title>KHOREI — wykrojnik</title>
 <style>
+/* Wygląd jak edytor brandmanuala: monochromatyczny, roboczy. Dwie kolumny: karty ustawień · podgląd. */
 :root{
-  /* układ: pasek górny, pasek narzędzi, stół roboczy po lewej, panel parametrów po prawej */
-  --bg:#e9ecee; --panel:#fafbfb; --ink:#1a2126; --muted:#62707a; --line:#d3d9dd; --canvas:#f3f5f6; --sheet:#ffffff;
-  --accent:#f08c00; --accent-ink:#1a1200;
-  --cut:#e03131; --crease:#1971c2; --perf:#2f9e44; --kiss:#9c36b5; --ignore:#9aa5ad;
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --bg:#f4f4f2; --panel:#ffffff; --fg:#111111; --muted:#77776f; --line:#e2e2dd; --soft:#f0f0ec; --on:#111111; --on-fg:#ffffff; --danger:#c62d1f;
+  --cut:#d92b1c; --crease:#1f5fd0; --perf:#1e8a3c; --kiss:#9b2fb5; --ignore:#b5b5ad;
+  --ui:"ABC Areal Variable",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
   color-scheme:light;
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#121619; --panel:#1a2024; --ink:#e4e9ec; --muted:#8b98a2; --line:#2c353b; --canvas:#0f1315; --sheet:#1d2428;
-    --accent:#ffa94d; --accent-ink:#1a1200;
-    --cut:#ff6b6b; --crease:#4dabf7; --perf:#51cf66; --kiss:#da77f2; --ignore:#5c6870;
-    color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#121619; --panel:#1a2024; --ink:#e4e9ec; --muted:#8b98a2; --line:#2c353b; --canvas:#0f1315; --sheet:#1d2428;
-  --accent:#ffa94d; --accent-ink:#1a1200;
-  --cut:#ff6b6b; --crease:#4dabf7; --perf:#51cf66; --kiss:#da77f2; --ignore:#5c6870;
-  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans);display:flex;flex-direction:column;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font:500 13px/1.35 var(--ui);-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit;color:inherit}
-.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{cursor:pointer}
+.app{height:100%;overflow:hidden;display:grid;grid-template-columns:400px minmax(0,1fr);grid-template-rows:52px minmax(0,1fr);grid-template-areas:"top top" "panel preview"}
+.top{grid-area:top;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0}
+.top__brand{font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.top__brand span{font-weight:500;color:var(--muted)}
+.top__status{color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.top__status b{color:var(--fg);font-weight:500}
+.top__actions{display:flex;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:2px;padding:6px 12px;white-space:nowrap}
+.btn:hover{border-color:var(--fg)}
+.btn:focus-visible,.card__title:focus-visible,.chips button:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
+.btn.is--primary{background:var(--on);color:var(--on-fg);border-color:var(--on)}
+.btn.is--add{width:100%;border-style:dashed;color:var(--muted);padding:14px 12px}
+.btn.is--add:hover{color:var(--fg)}
+.link{border:0;background:none;padding:0;color:var(--muted);text-decoration:underline;text-underline-offset:.15em}
+.link:hover{color:var(--fg)}
 
-.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
-.brand{font-weight:600;letter-spacing:.01em}
-.brand small{font:500 11px var(--mono);color:var(--muted);margin-left:6px;text-transform:uppercase}
-.file{display:flex;align-items:center;gap:8px;min-width:0;color:var(--muted)}
-.file b{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:28ch}
-.chip{font:500 11px var(--mono);padding:1px 6px;border:1px solid var(--line);border-radius:3px;color:var(--muted)}
-.grow{flex:1}
-.group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.btn{border:1px solid var(--line);background:var(--panel);padding:5px 10px;border-radius:4px;cursor:pointer;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
-.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
-.btn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
-.btn kbd{font:11px var(--mono);opacity:.6;margin-left:4px}
-.seg{display:flex}
-.seg .btn{border-radius:0;margin-left:-1px}
-.seg .btn:first-child{border-radius:4px 0 0 4px;margin-left:0}
-.seg .btn:last-child{border-radius:0 4px 4px 0}
+.panel{grid-area:panel;overflow:auto;border-right:1px solid var(--line);min-height:0}
+.panel__inner{padding:16px;display:grid;gap:8px}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:2px}
+.card.is--open{border-color:#c9c9c3}
+.card__title{width:100%;text-align:left;border:0;background:none;padding:10px 12px;display:flex;gap:8px;align-items:baseline}
+.card__chev{width:10px;color:var(--muted)}
+.card__sub{color:var(--muted);margin-left:auto;padding-left:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.card__body{padding:12px 12px 14px;display:none;gap:12px;border-top:1px solid var(--line)}
+.card.is--open .card__body{display:grid}
+.f{display:grid;gap:5px;min-width:0}
+.f__label{color:var(--muted);display:flex;justify-content:space-between;gap:6px;white-space:nowrap}
+.f input[type=number],.f select{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:2px;padding:7px 9px;font-variant-numeric:tabular-nums}
+.f input:focus,.f select:focus{outline:2px solid var(--fg);outline-offset:-1px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+.note{color:var(--muted);margin:0}
+.sub{display:grid;gap:10px;padding:12px;background:var(--soft);border-radius:2px}
+.sub__title{font-weight:500}
+.big{font-size:20px;font-weight:500;margin:0;font-variant-numeric:tabular-nums}
+.grp{display:grid;grid-template-columns:14px minmax(0,1fr) auto 130px;gap:8px;align-items:center}
+.grp i{width:14px;height:14px;border:1px solid var(--line)}
+.grp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
+.grp select{border:1px solid var(--line);background:var(--panel);border-radius:2px;padding:6px 8px;width:100%}
+.chips{display:flex;gap:3px;flex-wrap:wrap}
+.chips button{border:0;background:var(--soft);padding:5px 8px;border-radius:2px;white-space:nowrap}
+.chips button:hover{background:var(--line)}
+.chips button[aria-pressed=true]{background:var(--on);color:var(--on-fg)}
+.chips button svg{display:block}
+.chips button i{display:inline-block;width:8px;height:8px;margin-right:6px}
+.check{display:flex;align-items:center;gap:8px}
 
-.work{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 340px}
-.stage{display:flex;flex-direction:column;min-width:0;min-height:0}
-.tools{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
-.sep{width:1px;background:var(--line);margin:0 4px}
-#cv{flex:1;min-height:0;width:100%;background:var(--canvas);touch-action:none;display:block;cursor:default}
-#cv.t-node{cursor:crosshair} #cv.t-measure{cursor:crosshair} #cv.t-pan{cursor:grab}
-.status{display:flex;gap:16px;flex-wrap:wrap;padding:5px 16px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font:12px var(--mono)}
-
+.preview{grid-area:preview;display:flex;flex-direction:column;min-width:0;min-height:0}
+.preview__bar{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.preview__info{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto}
+#cv{flex:1;min-height:0;width:100%;display:block;touch-action:none;background:var(--bg)}
+#cv.t-node,#cv.t-measure{cursor:crosshair}
 .p{fill:none;stroke-width:1.4;vector-effect:non-scaling-stroke;pointer-events:none;stroke-linejoin:round}
 .t-cut{stroke:var(--cut)} .t-crease{stroke:var(--crease);stroke-dasharray:7 4} .t-perf{stroke:var(--perf);stroke-dasharray:2 3}
 .t-kiss{stroke:var(--kiss)} .t-ignore{stroke:var(--ignore);stroke-width:1;stroke-dasharray:1 3}
 .hit{fill:none;stroke:transparent;stroke-width:9;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer;stroke-linecap:round}
-.hit.on{stroke:var(--accent);stroke-opacity:.45}
-.sheet{fill:var(--sheet);stroke:var(--muted);stroke-width:1;vector-effect:non-scaling-stroke}
+.hit.on{stroke:var(--fg);stroke-opacity:.16}
+.sheet{fill:#fff;stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
 .area{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
-.mark{fill:var(--ink)}
-.nd{fill:var(--panel);stroke:var(--ink);stroke-width:1;cursor:move}
-.nd.on{fill:var(--accent);stroke:var(--accent-ink)}
-.marq{fill:var(--accent);fill-opacity:.12;stroke:var(--accent);stroke-width:1}
-.dim{font:11px var(--mono);fill:var(--muted)}
-.meas{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3}
-.measT{font:500 12px var(--mono);fill:var(--ink);paint-order:stroke;stroke:var(--canvas);stroke-width:4px}
-
-.side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;min-height:0}
-.side section{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
-.side h2{margin:0;font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.tile{border:1px solid var(--line);border-radius:4px;padding:7px 9px}
-.tile span{display:block;font-size:11px;color:var(--muted)}
-.tile b{font:500 15px var(--mono);font-variant-numeric:tabular-nums}
-.tile.wide{grid-column:1/-1}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.row label{color:var(--muted);font-size:12px}
-.fld{display:flex;flex-direction:column;gap:3px;flex:1;min-width:70px}
-.fld label{font-size:11px;color:var(--muted)}
-input[type=number],select{width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:4px;background:var(--canvas);font-family:var(--mono);font-size:13px}
-select{font-family:var(--sans)}
-.grp{display:grid;grid-template-columns:14px minmax(0,1fr) auto 118px;gap:8px;align-items:center}
-.grp i{width:14px;height:14px;border-radius:2px;border:1px solid var(--line)}
-.grp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px var(--mono)}
-.grp em{font:12px var(--mono);color:var(--muted);font-style:normal}
-.tbtn{display:flex;gap:6px;flex-wrap:wrap}
-.tbtn .btn{padding:3px 8px;font-size:12px;border-left-width:4px}
-.hint{font-size:12px;color:var(--muted);margin:0;max-width:65ch}
-.pad{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.pad .btn{padding:5px 0;text-align:center;font-family:var(--mono)}
-#toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:4px;font-size:13px;max-width:min(90vw,520px);display:none;z-index:5}
-#drop{position:fixed;inset:0;border:3px dashed var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);display:none;align-items:center;justify-content:center;font-size:18px;font-weight:500;z-index:4;pointer-events:none}
-@media (max-width:860px){
-  body{overflow:auto}
-  .work{grid-template-columns:1fr;flex:none}
-  #cv{height:62vh;flex:none}
-  .side{border-left:0;border-top:1px solid var(--line);overflow:visible}
+.mark{fill:var(--fg)}
+.nd{fill:var(--panel);stroke:var(--fg);stroke-width:1;cursor:move}
+.nd.on{fill:var(--fg)}
+.marq{fill:var(--fg);fill-opacity:.06;stroke:var(--fg);stroke-width:1}
+.dim{font:500 11px var(--ui);fill:var(--muted);font-variant-numeric:tabular-nums}
+.dim.hot{fill:var(--fg);font-weight:700}
+.tick{stroke:var(--muted);stroke-width:1}
+.meas{stroke:var(--fg);stroke-width:1;stroke-dasharray:3 3}
+.measT{font:600 12px var(--ui);fill:var(--fg);paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--on);color:var(--on-fg);padding:8px 14px;border-radius:2px;max-width:min(90vw,520px);display:none;z-index:5}
+#drop{position:fixed;inset:0;outline:2px dashed var(--fg);outline-offset:-12px;background:rgba(244,244,242,.85);display:none;align-items:center;justify-content:center;font-size:20px;z-index:4;pointer-events:none}
+@media (max-width:1000px){
+  html,body{height:auto}
+  .app{height:auto;overflow:visible;grid-template-columns:minmax(0,1fr);grid-template-rows:52px auto 62vh;grid-template-areas:"top" "panel" "preview"}
+  .panel{border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  .top__status{display:none}
 }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="brand">Edytor wykrojników<small>draft 0.1</small></div>
-  <div class="file"><b id="fname">pudełko-przykład</b><span class="chip" id="fchip">przykład</span></div>
-  <div class="grow"></div>
-  <div class="seg" role="group" aria-label="Widok">
-    <button class="btn" id="vDie" aria-pressed="true">Wykrojnik</button>
-    <button class="btn" id="vSheet" aria-pressed="false">Arkusz</button>
-  </div>
-  <div class="group">
-    <label class="btn primary" for="fileIn" tabindex="0">Importuj plik</label>
-    <input type="file" id="fileIn" accept=".svg,.dxf,.pdf,image/svg+xml,application/pdf" hidden>
-    <button class="btn" id="exDxf">Zapisz DXF</button>
-    <button class="btn" id="exPdf">Zapisz PDF</button>
-    <button class="btn" id="exSvg">Zapisz SVG</button>
-  </div>
-</header>
+<div class="app">
+  <header class="top">
+    <div class="top__brand">KHOREI <span>wykrojnik</span></div>
+    <div class="top__status" id="status"></div>
+    <div class="top__actions">
+      <button class="btn" id="bUndo" title="Ctrl Z">Cofnij</button>
+      <label class="btn is--primary" for="fileIn" tabindex="0">Wczytaj plik</label>
+      <input type="file" id="fileIn" accept=".svg,.dxf,.pdf,image/svg+xml,application/pdf" hidden>
+    </div>
+  </header>
 
-<div class="work">
-  <div class="stage">
-    <div class="tools">
-      <button class="btn" data-tool="select" aria-pressed="true">Zaznacz<kbd>V</kbd></button>
-      <button class="btn" data-tool="node" aria-pressed="false">Węzły<kbd>A</kbd></button>
-      <button class="btn" data-tool="measure" aria-pressed="false">Miarka<kbd>M</kbd></button>
-      <button class="btn" data-tool="pan" aria-pressed="false">Przesuwanie widoku<kbd>H</kbd></button>
-      <span class="sep"></span>
-      <button class="btn" id="bUndo">Cofnij<kbd>Ctrl Z</kbd></button>
-      <button class="btn" id="bDel">Usuń<kbd>Del</kbd></button>
-      <button class="btn" id="bJoin">Połącz ścieżki</button>
-      <button class="btn" id="bFit">Dopasuj widok</button>
+  <div class="panel"><div class="panel__inner">
+    <div class="card is--open" data-card="plik">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Plik</span><span class="card__sub" id="subPlik"></span></button>
+      <div class="card__body">
+        <label class="btn is--add" for="fileIn">Wczytaj albo upuść plik SVG, DXF, PDF</label>
+        <div class="grid2">
+          <div class="f"><label class="f__label" for="scW">Szerokość mm</label><input type="number" id="scW" step="0.1" min="1"></div>
+          <div class="f"><label class="f__label" for="scH">Wysokość mm</label><input type="number" id="scH" step="0.1" min="1"></div>
+        </div>
+        <p class="note">Zły rozmiar po wczytaniu? Wpisz właściwy. Całość skaluje się proporcjonalnie.</p>
+      </div>
+    </div>
+
+    <div class="card is--open" data-card="linie">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Linie</span><span class="card__sub" id="subLinie"></span></button>
+      <div class="card__body">
+        <div id="groups" style="display:grid;gap:6px"></div>
+        <div class="f"><span class="f__label">Zaznaczone linie zmień na</span><div class="chips" id="typeBtns"></div></div>
+      </div>
+    </div>
+
+    <div class="card is--open" data-card="wymiary">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Wymiary</span><span class="card__sub" id="subWym"></span></button>
+      <div class="card__body">
+        <div class="f"><span class="f__label">W poziomie mm</span><div class="grid3" id="dim-x"></div></div>
+        <div class="f"><span class="f__label">W pionie mm</span><div class="grid3" id="dim-y"></div></div>
+        <div class="sub">
+          <div class="grid2">
+            <div class="f"><label class="f__label" for="mat">Materiał</label><select id="mat"></select></div>
+            <div class="f"><label class="f__label" for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
+          </div>
+          <p class="note">„+ grubość” przy polu powiększa ten odcinek o grubość materiału.</p>
+        </div>
+        <p class="note">Odcinki liczę między liniami bigowania. Wpisz wymiar, reszta przesuwa się sama.</p>
+      </div>
+    </div>
+
+    <div class="card" data-card="arkusz">
+      <button class="card__title" type="button"><span class="card__chev">▸</span><span>Impozycja</span><span class="card__sub" id="subArk"></span></button>
+      <div class="card__body">
+        <p class="big" id="impBig">–</p>
+        <div class="grid2">
+          <div class="f"><label class="f__label" for="iW">Arkusz szerokość</label><input type="number" id="iW" value="1010" min="10"></div>
+          <div class="f"><label class="f__label" for="iH">Arkusz wysokość</label><input type="number" id="iH" value="720" min="10"></div>
+        </div>
+        <div class="grid3">
+          <div class="f"><label class="f__label" for="iM">Margines</label><input type="number" id="iM" value="12" min="0" step="0.5"></div>
+          <div class="f"><label class="f__label" for="iG">Odstęp</label><input type="number" id="iG" value="3" min="0" step="0.5"></div>
+          <div class="f"><label class="f__label" for="iMax">Ile sztuk</label><input type="number" id="iMax" min="1" placeholder="max"></div>
+        </div>
+        <div class="f"><span class="f__label">Obrót</span><div class="chips" id="rot"><button type="button" data-rot="auto" aria-pressed="true">Auto</button><button type="button" data-rot="0" aria-pressed="false">0°</button><button type="button" data-rot="90" aria-pressed="false">90°</button></div></div>
+        <label class="check"><input type="checkbox" id="iMk" checked> Znaczniki pasowania w rogach</label>
+      </div>
+    </div>
+
+    <div class="card is--open" data-card="zapis">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Zapis</span><span class="card__sub" id="subZapis"></span></button>
+      <div class="card__body">
+        <div class="grid3">
+          <button class="btn" id="exDxf" type="button">DXF</button>
+          <button class="btn" id="exPdf" type="button">PDF</button>
+          <button class="btn" id="exSvg" type="button">SVG</button>
+        </div>
+        <p class="note" id="saveNote"></p>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="preview">
+    <div class="preview__bar">
+      <div class="chips" id="tools">
+        <button type="button" data-tool="select" aria-pressed="true" title="V">Zaznacz</button>
+        <button type="button" data-tool="node" aria-pressed="false" title="A">Punkty</button>
+        <button type="button" data-tool="measure" aria-pressed="false" title="M">Miarka</button>
+      </div>
+      <div class="chips">
+        <button type="button" id="bDel" title="Delete">Usuń</button>
+        <button type="button" id="bJoin">Połącz linie</button>
+        <button type="button" id="bFit">Pokaż całość</button>
+      </div>
+      <div class="chips" id="align" aria-label="Wyrównaj zaznaczone"></div>
+      <span class="preview__info" id="info"></span>
     </div>
     <svg id="cv" xmlns="http://www.w3.org/2000/svg"><g id="world"></g><g id="overlay"></g></svg>
-    <div class="status"><span id="stPos">X – Y –</span><span id="stSel">nic nie zaznaczono</span><span id="stZoom"></span><span id="stHint"></span></div>
   </div>
-
-  <aside class="side">
-    <section>
-      <h2>Podsumowanie</h2>
-      <div class="tiles">
-        <div class="tile wide"><span>Wymiar wykrojnika</span><b id="sDim">–</b></div>
-        <div class="tile"><span>Długość cięcia</span><b id="sCut">–</b></div>
-        <div class="tile"><span>Długość bigowania</span><b id="sCrease">–</b></div>
-        <div class="tile"><span>Użytków na arkuszu</span><b id="sCount">–</b></div>
-        <div class="tile"><span>Wykorzystanie arkusza</span><b id="sUtil">–</b></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Typy linii</h2>
-      <div id="groups"></div>
-      <div class="row"><label>Zaznaczone ścieżki ustaw jako</label></div>
-      <div class="tbtn" id="typeBtns"></div>
-    </section>
-
-    <section>
-      <h2>Korekta wymiarów</h2>
-      <div class="row">
-        <div class="fld" style="flex:2"><label for="mat">Materiał</label><select id="mat"></select></div>
-        <div class="fld"><label for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
-      </div>
-      <div class="pad" aria-label="Przesuń zaznaczenie o grubość materiału">
-        <button class="btn" data-t="-1,0">← t</button><button class="btn" data-t="1,0">t →</button>
-        <button class="btn" data-t="0,-1">↑ t</button><button class="btn" data-t="0,1">↓ t</button>
-      </div>
-      <div class="row">
-        <div class="fld"><label for="mdx">ΔX mm</label><input type="number" id="mdx" step="0.1" value="0"></div>
-        <div class="fld"><label for="mdy">ΔY mm</label><input type="number" id="mdy" step="0.1" value="0"></div>
-        <button class="btn" id="bMove" style="align-self:flex-end">Przesuń</button>
-      </div>
-      <p class="hint">Narzędziem Węzły zaznacz ramką wszystko po jednej stronie zagięcia i przesuń o grubość materiału (t) albo o własną wartość. Panel wydłuża się, reszta zostaje na miejscu.</p>
-      <div class="row">
-        <div class="fld"><label for="scW">Szerokość całości mm</label><input type="number" id="scW" step="0.1" min="0"></div>
-        <button class="btn" id="bScale" style="align-self:flex-end">Skaluj plik</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>Impozycja na arkusz</h2>
-      <div class="row">
-        <div class="fld"><label for="iW">Arkusz szer.</label><input type="number" id="iW" value="1010" min="10"></div>
-        <div class="fld"><label for="iH">Arkusz wys.</label><input type="number" id="iH" value="720" min="10"></div>
-      </div>
-      <div class="row">
-        <div class="fld"><label for="iM">Margines</label><input type="number" id="iM" value="12" min="0" step="0.5"></div>
-        <div class="fld"><label for="iG">Odstęp</label><input type="number" id="iG" value="3" min="0" step="0.5"></div>
-        <div class="fld"><label for="iMax">Limit sztuk</label><input type="number" id="iMax" value="0" min="0"></div>
-      </div>
-      <div class="row">
-        <div class="fld"><label for="iRot">Obrót użytku</label><select id="iRot"><option value="auto">Automatycznie</option><option value="0">0°</option><option value="90">90°</option></select></div>
-        <div class="fld"><label for="iMk">Znaczniki ⌀ mm</label><input type="number" id="iMk" value="5" min="0" step="0.5"></div>
-      </div>
-      <p class="hint">Domyślny arkusz to maksimum DF1007-MT: 1010 × 720 mm, pole cięcia 1000 × 700 mm. Znaczniki ⌀ 0 wyłącza znaczniki pasowania. Limit 0 oznacza tyle sztuk, ile się zmieści.</p>
-    </section>
-
-    <section>
-      <h2>Import</h2>
-      <div class="fld"><label for="unit">Jednostki w pliku SVG i DXF</label>
-        <select id="unit"><option value="auto">Wykryj automatycznie</option><option value="mm">Milimetry</option><option value="pt">Punkty 72 dpi (Illustrator)</option><option value="px">Piksele 96 dpi</option><option value="in">Cale</option></select></div>
-      <p class="hint">Wczytuję SVG, DXF i pierwszą stronę PDF. Typ linii rozpoznaję po kolorze obrysu (SVG, PDF) albo po warstwie (DXF), więc każdy typ powinien mieć własny kolor lub warstwę. Plik zostaje w przeglądarce.</p>
-    </section>
-  </aside>
 </div>
 <div id="toast" role="status"></div>
 <div id="drop">Upuść plik SVG, DXF lub PDF</div>
@@ -569,20 +550,6 @@ function writeSVG(items,W,H,marks){
   if(marks&&marks.length){s+='<g id="REG" fill="#000">\n';marks.forEach(function(m){s+='<circle cx="'+fmt(m.x)+'" cy="'+fmt(m.y)+'" r="'+fmt(m.r)+'"/>\n';});s+='</g>\n';}
   return s+'</svg>\n';
 }
-function crc32(u){var c,t=crc32.t;if(!t){t=crc32.t=[];for(var n=0;n<256;n++){c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}}
-  c=0xFFFFFFFF;for(var i=0;i<u.length;i++)c=t[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
-function zipStore(name,text){
-  var enc=function(s){var o=[];for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if(c<128)o.push(c);else if(c<2048)o.push(192|c>>6,128|c&63);else o.push(224|c>>12,128|c>>6&63,128|c&63);}return new Uint8Array(o);};
-  var nm=enc(name),data=enc(text),crc=crc32(data),buf=new Uint8Array(30+nm.length+data.length+46+nm.length+22),v=new DataView(buf.buffer),o=0;
-  v.setUint32(o,0x04034b50,true);v.setUint16(o+4,20,true);v.setUint16(o+6,0x0800,true);v.setUint16(o+8,0,true);v.setUint16(o+10,0,true);v.setUint16(o+12,33,true);
-  v.setUint32(o+14,crc,true);v.setUint32(o+18,data.length,true);v.setUint32(o+22,data.length,true);v.setUint16(o+26,nm.length,true);v.setUint16(o+28,0,true);
-  buf.set(nm,30);buf.set(data,30+nm.length);o=30+nm.length+data.length;var cd=o;
-  v.setUint32(o,0x02014b50,true);v.setUint16(o+4,20,true);v.setUint16(o+6,20,true);v.setUint16(o+8,0x0800,true);v.setUint16(o+10,0,true);v.setUint16(o+12,0,true);v.setUint16(o+14,33,true);
-  v.setUint32(o+16,crc,true);v.setUint32(o+20,data.length,true);v.setUint32(o+24,data.length,true);v.setUint16(o+28,nm.length,true);
-  buf.set(nm,o+46);o+=46+nm.length;
-  v.setUint32(o,0x06054b50,true);v.setUint16(o+8,1,true);v.setUint16(o+10,1,true);v.setUint32(o+12,o-cd,true);v.setUint32(o+16,cd,true);
-  return buf;
-}
 function samplePaths(){
   var xs=[12,72,112,172,212],top=[{x:12,y:30}],bot=[],out=[],i;
   for(i=0;i<4;i++){var a=xs[i],b=xs[i+1];top.push({x:a+.5,y:30},{x:a+2.5,y:2},{x:b-2.5,y:2},{x:b-.5,y:30});}
@@ -597,36 +564,65 @@ function samplePaths(){
   var h=B.done()[0];h.type='cut';h.src='#ff0000';out.push(h);
   return out;
 }
-if(typeof module!=='undefined')module.exports={parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,zipStore:zipStore,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
-</script>
 
+/* --- wymiary: odcinki między bigami i rozciąganie --- */
+function axisCuts(paths,ax){
+  var act=paths.filter(function(p){return p.type!=='ignore';}),b=bboxOf(act);if(!b)return [];
+  var o=ax==='x'?'y':'x',lo=ax==='x'?b.x:b.y,len=ax==='x'?b.w:b.h,oth=ax==='x'?b.h:b.w,sum={},vals=[lo,lo+len];
+  act.forEach(function(p){if(p.type!=='crease'||p.pts.some(hasC))return;var v=p.pts[0][ax];
+    if(!p.pts.every(function(q){return Math.abs(q[ax]-v)<0.05;}))return;
+    var mn=Infinity,mx=-Infinity;p.pts.forEach(function(q){mn=Math.min(mn,q[o]);mx=Math.max(mx,q[o]);});
+    var k=Math.round(v*10)/10;sum[k]=(sum[k]||0)+(mx-mn);});
+  Object.keys(sum).forEach(function(k){if(sum[k]>=oth*0.25)vals.push(+k);});
+  vals.sort(function(x,y){return x-y;});
+  var out=[];vals.forEach(function(v){if(!out.length||v-out[out.length-1]>0.3)out.push(v);});
+  if(out.length>1&&lo+len-out[out.length-1]<=0.3&&out[out.length-1]!==lo+len)out[out.length-1]=lo+len;
+  return out;
+}
+function stretchAxis(paths,ax,a,b,d){
+  var mid=(a+b)/2,eps=0.05,dx=ax==='x'?1:0,dy=ax==='x'?0:1;
+  paths.forEach(function(p){
+    var mn=Infinity,mx=-Infinity;p.pts.forEach(function(q){mn=Math.min(mn,q[ax]);mx=Math.max(mx,q[ax]);});
+    if(mn>a+eps&&mx<b-eps&&mx-mn<0.6*(b-a)){movePath(p,dx*d/2,dy*d/2);return;}
+    var idx=[];p.pts.forEach(function(q,i){if(q[ax]>mid)idx.push(i);});
+    idx.forEach(function(i){moveNode(p,i,dx*d,dy*d);});
+  });
+}
+function scaleAxis(paths,ax,lo,k){
+  return paths.map(function(p){return mapPath(p,function(x,y){return ax==='x'?[lo+(x-lo)*k,y]:[x,lo+(y-lo)*k];});});
+}
+if(typeof module!=='undefined')module.exports={axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
+</script>
 <script>
 /* ===== Interfejs ===== */
 (function(){
 var $=function(id){return document.getElementById(id);};
 var svg=$('cv'),world=$('world'),overlay=$('overlay');
-var S={paths:[],sel:new Set(),nsel:new Set(),tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko-przykład',sample:true,meas:null,undo:[],nid:1};
+var S={paths:[],sel:new Set(),nsel:new Set(),tool:'select',view:'die',z:2,tx:40,ty:40,name:'przykład',meas:null,undo:[],nid:1,rot:'auto',hot:null};
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
-var drag=null,space=false,raf=0,dl=null;
-if(window.claude&&window.claude.use){try{window.claude.use('downloads').then(function(d){dl=d;}).catch(function(){});}catch(e){}}
+var LBL={cut:'Cięcie',crease:'Bigowanie',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
+var drag=null,space=false,raf=0,editing=false;
 
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function toast(t){var e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){e.style.display='none';},4200);}
-function cfg(){var n=function(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d;};return {W:Math.max(10,n('iW',1010)),H:Math.max(10,n('iH',720)),m:Math.max(0,n('iM',12)),gap:Math.max(0,n('iG',3)),max:Math.max(0,Math.floor(n('iMax',0))),rot:$('iRot').value,mk:Math.max(0,n('iMk',5))};}
+function n1(v){return v.toFixed(1).replace('.',',');}
+function toast(t){var e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){e.style.display='none';},3800);}
+function cfg(){var n=function(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d;};return {W:Math.max(10,n('iW',1010)),H:Math.max(10,n('iH',720)),m:Math.max(0,n('iM',12)),gap:Math.max(0,n('iG',3)),max:Math.max(0,Math.floor(n('iMax',0))),rot:S.rot,mk:$('iMk').checked?5:0};}
 function thk(){var v=parseFloat($('thk').value);return isFinite(v)?v:0;}
 function byId(id){for(var i=0;i<S.paths.length;i++)if(S.paths[i].id===id)return S.paths[i];return null;}
-function pushUndo(){S.undo.push(JSON.stringify(S.paths));if(S.undo.length>60)S.undo.shift();}
-function undo(){var u=S.undo.pop();if(!u){toast('Nie ma czego cofać.');return;}S.paths=JSON.parse(u);S.sel.clear();S.nsel.clear();refresh();}
+function pushUndo(){S.undo.push(JSON.stringify(S.paths));if(S.undo.length>80)S.undo.shift();}
+function undo(){var u=S.undo.pop();if(!u){toast('Nie ma czego cofać.');return;}S.paths=JSON.parse(u);S.sel.clear();S.nsel.clear();refresh(true);}
+function active(){return S.paths.filter(function(p){return p.type!=='ignore';});}
 
-/* --- widok --- */
+/* --- podgląd --- */
 function toWorld(e){var r=svg.getBoundingClientRect();return {x:(e.clientX-r.left-S.tx)/S.z,y:(e.clientY-r.top-S.ty)/S.z};}
 function contentBox(){if(S.view==='sheet'){var c=cfg();return {x:0,y:0,w:c.W,h:c.H};}return bboxOf(S.paths)||{x:0,y:0,w:100,h:100};}
-function fitView(){var r=svg.getBoundingClientRect(),b=contentBox(),pad=48;if(!r.width)return;
+function fitView(){var r=svg.getBoundingClientRect(),b=contentBox(),pad=56;if(!r.width)return;
   S.z=Math.max(0.05,Math.min((r.width-2*pad)/Math.max(b.w,1),(r.height-2*pad)/Math.max(b.h,1)));
   S.tx=(r.width-b.w*S.z)/2-b.x*S.z;S.ty=(r.height-b.h*S.z)/2-b.y*S.z;render();}
 function nodes(){var o=[];S.paths.forEach(function(p){p.pts.forEach(function(q,i){o.push({k:p.id+':'+i,p:p,i:i,x:q.x,y:q.y});});});return o;}
 function snap(w,skipSel){var best=null,lim=9/S.z;nodes().forEach(function(n){if(skipSel&&S.nsel.has(n.k))return;var d=Math.hypot(n.x-w.x,n.y-w.y);if(d<lim&&(!best||d<best.d))best={d:d,x:n.x,y:n.y};});return best?{x:best.x,y:best.y}:w;}
+function segName(ax,i){return ax==='x'?String.fromCharCode(65+i%26):String(i+1);}
 
 function render(){
   var h='';
@@ -641,91 +637,149 @@ function render(){
   }
   world.innerHTML=h;world.setAttribute('transform','matrix('+S.z+' 0 0 '+S.z+' '+S.tx+' '+S.ty+')');
   renderOverlay();
-  $('stZoom').textContent='zoom '+Math.round(S.z*100/3.78)+'%';
 }
 function renderOverlay(){
   var h='',sx=function(x){return x*S.z+S.tx;},sy=function(y){return y*S.z+S.ty;};
   if(S.view==='die'){
-    var b=bboxOf(S.paths.filter(function(p){return p.type!=='ignore';}));
-    if(b){h+='<text class="dim" text-anchor="middle" x="'+sx(b.x+b.w/2)+'" y="'+(sy(b.y)-12)+'">'+b.w.toFixed(1)+' mm</text>';
-      h+='<text class="dim" text-anchor="middle" transform="translate('+(sx(b.x)-12)+' '+sy(b.y+b.h/2)+') rotate(-90)">'+b.h.toFixed(1)+' mm</text>';}
+    var b=bboxOf(active());
+    if(b){
+      var cx=axisCuts(S.paths,'x'),cy=axisCuts(S.paths,'y'),ty=sy(b.y)-14,tx=sx(b.x)-14,i;
+      for(i=0;i<cx.length;i++)h+='<line class="tick" x1="'+sx(cx[i])+'" x2="'+sx(cx[i])+'" y1="'+(ty-2)+'" y2="'+(ty+6)+'"/>';
+      for(i=0;i+1<cx.length;i++)if((cx[i+1]-cx[i])*S.z>34)h+='<text class="dim'+(S.hot==='x'+i?' hot':'')+'" text-anchor="middle" x="'+sx((cx[i]+cx[i+1])/2)+'" y="'+(ty-6)+'">'+segName('x',i)+' '+n1(cx[i+1]-cx[i])+'</text>';
+      for(i=0;i<cy.length;i++)h+='<line class="tick" y1="'+sy(cy[i])+'" y2="'+sy(cy[i])+'" x1="'+(tx-2)+'" x2="'+(tx+6)+'"/>';
+      for(i=0;i+1<cy.length;i++)if((cy[i+1]-cy[i])*S.z>34)h+='<text class="dim'+(S.hot==='y'+i?' hot':'')+'" text-anchor="middle" transform="translate('+(tx-6)+' '+sy((cy[i]+cy[i+1])/2)+') rotate(-90)">'+segName('y',i)+' '+n1(cy[i+1]-cy[i])+'</text>';
+    }
     if(S.tool==='node'){var ns=nodes();if(ns.length>6000)ns=ns.filter(function(n){return S.sel.has(n.p.id)||S.nsel.has(n.k);});
       ns.forEach(function(n){h+='<rect class="nd'+(S.nsel.has(n.k)?' on':'')+'" data-n="'+n.k+'" x="'+(sx(n.x)-3.5)+'" y="'+(sy(n.y)-3.5)+'" width="7" height="7"/>';});}
   }
   if(drag&&drag.k==='marq'){var x=Math.min(drag.a.x,drag.b.x),y=Math.min(drag.a.y,drag.b.y);h+='<rect class="marq" x="'+sx(x)+'" y="'+sy(y)+'" width="'+Math.abs(drag.b.x-drag.a.x)*S.z+'" height="'+Math.abs(drag.b.y-drag.a.y)*S.z+'"/>';}
   if(S.meas&&S.meas.a){var a=S.meas.a,e=S.meas.b||S.meas.h;if(e){var dx=e.x-a.x,dy=e.y-a.y;
-    h+='<line class="meas" x1="'+sx(a.x)+'" y1="'+sy(a.y)+'" x2="'+sx(e.x)+'" y2="'+sy(e.y)+'"/><text class="measT" x="'+(sx(e.x)+10)+'" y="'+(sy(e.y)-10)+'">'+Math.hypot(dx,dy).toFixed(2)+' mm  ΔX '+Math.abs(dx).toFixed(2)+'  ΔY '+Math.abs(dy).toFixed(2)+'</text>';}}
+    h+='<line class="meas" x1="'+sx(a.x)+'" y1="'+sy(a.y)+'" x2="'+sx(e.x)+'" y2="'+sy(e.y)+'"/><text class="measT" x="'+(sx(e.x)+10)+'" y="'+(sy(e.y)-10)+'">'+Math.hypot(dx,dy).toFixed(2)+' mm · poziomo '+Math.abs(dx).toFixed(2)+' · pionowo '+Math.abs(dy).toFixed(2)+'</text>';}}
   overlay.innerHTML=h;
 }
 function schedule(){if(!raf)raf=requestAnimationFrame(function(){raf=0;render();});}
 
-/* --- panele --- */
+/* --- karty: wartości na żywo --- */
 var groupList=[];
-function refresh(){
+function setVal(id,v){var e=$(id);if(e&&document.activeElement!==e)e.value=v;}
+function renderDims(force){
+  ['x','y'].forEach(function(ax){
+    var c=axisCuts(S.paths,ax),box=$('dim-'+ax),n=Math.max(0,c.length-1);
+    if(force||+box.dataset.n!==n){box.dataset.n=n;var h='';
+      for(var i=0;i<n;i++)h+='<div class="f"><span class="f__label"><label for="d'+ax+i+'">'+segName(ax,i)+'</label><button class="link" type="button" data-add="'+ax+':'+i+'">+ grubość</button></span><input type="number" step="0.1" min="1" id="d'+ax+i+'" data-ax="'+ax+'" data-i="'+i+'"></div>';
+      box.innerHTML=h||'<p class="note">Brak linii.</p>';}
+    for(var k=0;k<n;k++)setVal('d'+ax+k,(Math.round((c[k+1]-c[k])*100)/100).toString());
+  });
+}
+function refresh(forceDims){
   render();
-  var act=S.paths.filter(function(p){return p.type!=='ignore';}),b=bboxOf(act),len={cut:0,crease:0};
+  var act=active(),b=bboxOf(act),len={cut:0,crease:0};
   act.forEach(function(p){if(len[p.type]!==undefined)len[p.type]+=pathLength(p);});
-  $('sDim').textContent=b?b.w.toFixed(1)+' × '+b.h.toFixed(1)+' mm':'–';
-  $('sCut').textContent=(len.cut/1000).toFixed(2)+' m';$('sCrease').textContent=(len.crease/1000).toFixed(2)+' m';
-  var L=layoutSheet(S.paths,cfg());
-  $('sCount').textContent=L?L.count+' szt.'+(L.rot?' · 90°':''):'–';$('sUtil').textContent=L?Math.round(L.util*100)+'%':'–';
-  if(b&&document.activeElement!==$('scW'))$('scW').value=b.w.toFixed(1);
+  var c=cfg(),L=layoutSheet(S.paths,c),dimT=b?n1(b.w)+' × '+n1(b.h)+' mm':'–',impT=L?L.count+' szt.':'–';
+  $('status').innerHTML=b?'<b>'+esc(S.name)+'</b> · '+dimT+' · cięcie '+(len.cut/1000).toFixed(2).replace('.',',')+' m · bigowanie '+(len.crease/1000).toFixed(2).replace('.',',')+' m · arkusz '+impT:'Wczytaj plik, żeby zacząć.';
+  $('subPlik').textContent=S.name;$('subWym').textContent=dimT;$('subArk').textContent=L?impT+' · '+Math.round(L.util*100)+'%':'–';
+  $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.cols+' × '+Math.ceil(L.count/L.cols)+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':'Nie mieści się na arkuszu';
+  if(b){setVal('scW',(Math.round(b.w*10)/10).toString());setVal('scH',(Math.round(b.h*10)/10).toString());}
+  renderDims(forceDims);
   var map={};groupList=[];
   S.paths.forEach(function(p){var g=map[p.src];if(!g){g=map[p.src]={src:p.src,n:0,types:{}};groupList.push(g);}g.n++;g.types[p.type]=1;});
-  $('groups').innerHTML=groupList.map(function(g,i){var ts=Object.keys(g.types),cur=ts.length===1?ts[0]:'',m=/#[0-9a-f]{6}/i.exec(g.src);
-    return '<div class="grp" style="margin-bottom:6px"><i style="background:'+(m?m[0]:'transparent')+'"></i><span title="'+esc(g.src)+'">'+esc(g.src)+'</span><em>'+g.n+'</em><select id="grp'+i+'" data-g="'+i+'" aria-label="Typ linii dla '+esc(g.src)+'">'+(cur?'':'<option value="">mieszane</option>')+
-      Object.keys(TYPES).map(function(t){return '<option value="'+t+'"'+(t===cur?' selected':'')+'>'+TYPES[t].label+'</option>';}).join('')+'</select></div>';}).join('')||'<p class="hint">Brak ścieżek. Zaimportuj plik.</p>';
+  var sig=groupList.map(function(g){return g.src+g.n+Object.keys(g.types).join();}).join('|');
+  if(sig!==refresh.sig){refresh.sig=sig;
+    $('groups').innerHTML=groupList.map(function(g,i){var ts=Object.keys(g.types),cur=ts.length===1?ts[0]:'',m=/#[0-9a-f]{6}/i.exec(g.src);
+      return '<div class="grp"><i style="background:'+(m?m[0]:'transparent')+'"></i><span title="'+esc(g.src)+'">'+esc(m?'Kolor '+g.src:'Warstwa '+g.src)+'</span><em>'+g.n+'</em><select id="grp'+i+'" data-g="'+i+'" aria-label="Rodzaj linii">'+(cur?'':'<option value="">różne</option>')+
+        Object.keys(LBL).map(function(t){return '<option value="'+t+'"'+(t===cur?' selected':'')+'>'+LBL[t]+'</option>';}).join('')+'</select></div>';}).join('')||'<p class="note">Brak linii.</p>';}
+  $('subLinie').textContent=S.paths.length+' linii';
+  var sheet=S.view==='sheet';
+  $('subZapis').textContent=sheet?'arkusz':'pojedynczy';
+  $('saveNote').textContent=sheet?'Zapisuję cały arkusz ('+impT+'). Zwiń Impozycję, żeby zapisać pojedynczy wykrojnik.':'Zapisuję pojedynczy wykrojnik. Rozwiń Impozycję, żeby zapisać cały arkusz.';
   var ns=S.nsel.size,ps=S.sel.size;
-  $('stSel').textContent=S.tool==='node'&&ns?'zaznaczone węzły: '+ns:ps?'zaznaczone ścieżki: '+ps:'nic nie zaznaczono';
-  $('fname').textContent=S.name;$('fchip').style.display=S.sample?'':'none';
+  info.sel=S.tool==='node'&&ns?'punkty: '+ns:ps?'linie: '+ps:'';showInfo();
 }
-$('typeBtns').innerHTML=Object.keys(TYPES).map(function(t){return '<button class="btn" data-type="'+t+'" style="border-left-color:var(--'+t+')">'+TYPES[t].label+'</button>';}).join('');
-$('typeBtns').addEventListener('click',function(e){var t=e.target.dataset.type;if(!t)return;if(!S.sel.size){toast('Najpierw zaznacz ścieżki narzędziem Zaznacz.');return;}
-  pushUndo();S.paths.forEach(function(p){if(S.sel.has(p.id))p.type=t;});refresh();});
-$('groups').addEventListener('change',function(e){var g=groupList[e.target.dataset.g];if(!g||!e.target.value)return;pushUndo();S.paths.forEach(function(p){if(p.src===g.src)p.type=e.target.value;});refresh();});
+var info={pos:'',sel:''};
+function showInfo(){var hint=S.view==='sheet'?'przeciągnij, żeby przesunąć widok':{select:'kliknij linię · Shift dodaje',node:'ramka zaznacza · dwuklik dodaje punkt',measure:'kliknij dwa punkty'}[S.tool];
+  $('info').textContent=[info.sel,info.pos,hint].filter(Boolean).join('  ·  ');}
+
+/* --- karty: zwijanie --- */
+function setView(v){if(S.view===v)return;S.view=v;S.meas=null;refresh();fitView();}
+document.querySelector('.panel').addEventListener('click',function(e){
+  var t=e.target.closest('.card__title');if(!t)return;var c=t.parentNode,open=c.classList.toggle('is--open');
+  t.querySelector('.card__chev').textContent=open?'▾':'▸';
+  if(c.dataset.card==='arkusz')setView(open?'sheet':'die');
+});
+
+/* --- linie --- */
+$('typeBtns').innerHTML=Object.keys(LBL).map(function(t){return '<button type="button" data-type="'+t+'"><i style="background:var(--'+t+')"></i>'+LBL[t]+'</button>';}).join('');
+$('typeBtns').addEventListener('click',function(e){var b=e.target.closest('[data-type]');if(!b)return;if(!S.sel.size){toast('Najpierw kliknij linię na podglądzie.');return;}
+  pushUndo();S.paths.forEach(function(p){if(S.sel.has(p.id))p.type=b.dataset.type;});refresh(true);});
+$('groups').addEventListener('change',function(e){var g=groupList[e.target.dataset.g];if(!g||!e.target.value)return;pushUndo();S.paths.forEach(function(p){if(p.src===g.src)p.type=e.target.value;});refresh(true);});
+
+/* --- wymiary na żywo --- */
+function startEdit(){if(!editing){editing=true;pushUndo();}}
+document.querySelector('.panel').addEventListener('focusout',function(){editing=false;if(S.hot){S.hot=null;render();}});
+function resize(ax,i,d){
+  var c=axisCuts(S.paths,ax);if(i+1>=c.length||Math.abs(d)<1e-6)return;
+  if(c[i+1]-c[i]+d<1)return;
+  if(c.length===2)S.paths=scaleAxis(S.paths,ax,c[0],(c[1]-c[0]+d)/(c[1]-c[0]));
+  else stretchAxis(S.paths,ax,c[i],c[i+1],d);
+  S.nsel.clear();
+}
+['dim-x','dim-y'].forEach(function(id){
+  $(id).addEventListener('input',function(e){var t=e.target,ax=t.dataset.ax,i=+t.dataset.i,v=parseFloat(t.value);if(!ax||!(v>=1))return;
+    var c=axisCuts(S.paths,ax);startEdit();resize(ax,i,v-(c[i+1]-c[i]));refresh();});
+  $(id).addEventListener('focusin',function(e){if(e.target.dataset.ax){S.hot=e.target.dataset.ax+e.target.dataset.i;render();}});
+  $(id).addEventListener('click',function(e){var a=e.target.dataset.add;if(!a)return;var p=a.split(':');if(!(thk()>0)){toast('Ustaw grubość materiału.');return;}
+    pushUndo();resize(p[0],+p[1],thk());refresh();toast(segName(p[0],+p[1])+' + '+thk().toString().replace('.',',')+' mm');});
+});
+function scaleTo(k){if(!(k>0)||!isFinite(k))return;var b=bboxOf(S.paths);startEdit();S.paths=S.paths.map(function(p){return mapPath(p,function(x,y){return [(x-b.x)*k,(y-b.y)*k];});});S.nsel.clear();refresh();fitView();}
+$('scW').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat($('scW').value);if(b&&v>=1)scaleTo(v/b.w);});
+$('scH').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat($('scH').value);if(b&&v>=1)scaleTo(v/b.h);});
 $('mat').innerHTML=MATS.map(function(m,i){return '<option value="'+i+'">'+esc(m[0])+'</option>';}).join('');
 $('mat').value='3';$('thk').value=MATS[3][1];
 $('mat').addEventListener('change',function(){$('thk').value=MATS[+$('mat').value][1];});
 $('thk').addEventListener('change',function(){MATS[+$('mat').value][1]=thk();try{localStorage.setItem('wykr-mats',JSON.stringify(MATS));}catch(e){}});
-['iW','iH','iM','iG','iMax','iRot','iMk'].forEach(function(id){$(id).addEventListener('input',function(){refresh();if(S.view==='sheet')fitView();});});
 
-/* --- edycja --- */
+/* --- impozycja na żywo --- */
+['iW','iH','iM','iG','iMax','iMk'].forEach(function(id){$(id).addEventListener('input',function(){refresh();if(S.view==='sheet'&&(id==='iW'||id==='iH'))fitView();});});
+$('rot').addEventListener('click',function(e){var r=e.target.dataset.rot;if(!r)return;S.rot=r;$('rot').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.rot===r?'true':'false');});refresh();});
+
+/* --- edycja na podglądzie --- */
 function moveSel(dx,dy){
-  if(!dx&&!dy)return false;
   if(S.tool==='node'&&S.nsel.size){S.nsel.forEach(function(k){var a=k.split(':'),p=byId(+a[0]);if(p)moveNode(p,+a[1],dx,dy);});return true;}
   if(S.sel.size){S.paths.forEach(function(p){if(S.sel.has(p.id))movePath(p,dx,dy);});return true;}
   return false;
 }
-function moveCmd(dx,dy){if(S.view==='sheet'){toast('Edycja działa w widoku Wykrojnik.');return;}
-  if(!(S.sel.size||(S.tool==='node'&&S.nsel.size))){toast('Zaznacz ścieżki albo węzły, które mam przesunąć.');return;}pushUndo();moveSel(dx,dy);refresh();}
-document.querySelector('.pad').addEventListener('click',function(e){var t=e.target.dataset.t;if(!t)return;var a=t.split(',');moveCmd(+a[0]*thk(),+a[1]*thk());});
-$('bMove').addEventListener('click',function(){moveCmd(parseFloat($('mdx').value)||0,parseFloat($('mdy').value)||0);});
-$('bScale').addEventListener('click',function(){var b=bboxOf(S.paths),w=parseFloat($('scW').value);if(!b||!(w>0)||!b.w)return;var k=w/b.w;pushUndo();
-  S.paths=S.paths.map(function(p){return mapPath(p,function(x,y){return [(x-b.x)*k,(y-b.y)*k];});});S.nsel.clear();refresh();fitView();toast('Przeskalowano ×'+k.toFixed(4));});
 function del(){
   if(S.tool==='node'&&S.nsel.size){pushUndo();var by={};S.nsel.forEach(function(k){var a=k.split(':');(by[a[0]]=by[a[0]]||[]).push(+a[1]);});
     Object.keys(by).forEach(function(id){var p=byId(+id);if(!p)return;by[id].sort(function(a,b){return b-a;}).forEach(function(i){deleteNode(p,i);});});
-    S.paths=S.paths.filter(function(p){return p.pts.length>1;});S.nsel.clear();refresh();}
-  else if(S.sel.size){pushUndo();S.paths=S.paths.filter(function(p){return !S.sel.has(p.id);});S.sel.clear();S.nsel.clear();refresh();}
-  else toast('Nic nie jest zaznaczone.');
+    S.paths=S.paths.filter(function(p){return p.pts.length>1;});S.nsel.clear();refresh(true);}
+  else if(S.sel.size){pushUndo();S.paths=S.paths.filter(function(p){return !S.sel.has(p.id);});S.sel.clear();S.nsel.clear();refresh(true);}
+  else toast('Najpierw zaznacz linię albo punkt.');
 }
+var AL=[['l','Wyrównaj do lewej','M2 1v12M5 3h7v3H5zM5 8h4v3H5z'],['cx','Wyśrodkuj w poziomie','M7 1v12M2 3h10v3H2zM4 8h6v3H4z'],['r','Wyrównaj do prawej','M12 1v12M2 3h7v3H2zM5 8h4v3H5z'],
+  ['t','Wyrównaj do góry','M1 2h12M3 5h3v7H3zM8 5h3v4H8z'],['cy','Wyśrodkuj w pionie','M1 7h12M3 2h3v10H3zM8 4h3v6H8z'],['b','Wyrównaj do dołu','M1 12h12M3 2h3v7H3zM8 5h3v4H8z']];
+$('align').innerHTML=AL.map(function(a){return '<button type="button" data-al="'+a[0]+'" title="'+a[1]+'" aria-label="'+a[1]+'"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><path d="'+a[2]+'"/></svg></button>';}).join('');
+$('align').addEventListener('click',function(e){var bt=e.target.closest('[data-al]');if(!bt)return;
+  if(S.view!=='die'){toast('Zwiń Impozycję, żeby edytować wykrojnik.');return;}
+  var sel=S.paths.filter(function(p){return S.sel.has(p.id);});if(!sel.length){toast('Zaznacz linie do wyrównania. Jedna wyrównuje się do całego wykrojnika, kilka do siebie.');return;}
+  var ref=bboxOf(sel.length>1?sel:active()),m=bt.dataset.al;pushUndo();
+  sel.forEach(function(p){var b=bboxOf([p]),dx=0,dy=0;
+    if(m==='l')dx=ref.x-b.x;else if(m==='cx')dx=ref.x+ref.w/2-b.x-b.w/2;else if(m==='r')dx=ref.x+ref.w-b.x-b.w;
+    else if(m==='t')dy=ref.y-b.y;else if(m==='cy')dy=ref.y+ref.h/2-b.y-b.h/2;else dy=ref.y+ref.h-b.y-b.h;
+    movePath(p,dx,dy);});
+  refresh();});
 $('bDel').addEventListener('click',del);$('bUndo').addEventListener('click',undo);$('bFit').addEventListener('click',fitView);
 $('bJoin').addEventListener('click',function(){var set=S.sel.size?S.paths.filter(function(p){return S.sel.has(p.id);}):S.paths;pushUndo();
-  var r=joinPaths(set,0.05);S.paths=S.paths.filter(function(p){return !r.gone[p.id];});S.sel.clear();S.nsel.clear();refresh();
-  toast(r.merged?'Połączono odcinki: '+r.merged+'.':'Nie znalazłem stykających się końców (tolerancja 0,05 mm).');});
-
-function setTool(t){S.tool=t;document.querySelectorAll('[data-tool]').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.tool===t?'true':'false');});
-  svg.setAttribute('class','t-'+t);if(t!=='measure')S.meas=null;
-  $('stHint').textContent={select:'klik zaznacza, Shift dodaje, przeciągnij aby przesunąć',node:'ramka zaznacza węzły, dwuklik na linii dodaje węzeł',measure:'kliknij dwa punkty',pan:'przeciągnij, kółko myszy przybliża'}[t];refresh();}
-document.querySelector('.tools').addEventListener('click',function(e){var b=e.target.closest('[data-tool]');if(b)setTool(b.dataset.tool);});
-function setView(v){S.view=v;$('vDie').setAttribute('aria-pressed',v==='die');$('vSheet').setAttribute('aria-pressed',v==='sheet');refresh();fitView();}
-$('vDie').addEventListener('click',function(){setView('die');});$('vSheet').addEventListener('click',function(){setView('sheet');});
+  var r=joinPaths(set,0.05);S.paths=S.paths.filter(function(p){return !r.gone[p.id];});S.sel.clear();S.nsel.clear();refresh(true);
+  toast(r.merged?'Połączono: '+r.merged+'.':'Nie ma linii, które stykają się końcami.');});
+function setTool(t){S.tool=t;$('tools').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.tool===t?'true':'false');});
+  svg.setAttribute('class','t-'+t);if(t!=='measure')S.meas=null;refresh();}
+$('tools').addEventListener('click',function(e){var b=e.target.closest('[data-tool]');if(b)setTool(b.dataset.tool);});
 
 svg.addEventListener('wheel',function(e){e.preventDefault();var r=svg.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,k=Math.exp(-e.deltaY*0.0015),z=Math.max(0.05,Math.min(400,S.z*k));
   S.tx=mx-(mx-S.tx)*z/S.z;S.ty=my-(my-S.ty)*z/S.z;S.z=z;schedule();},{passive:false});
 svg.addEventListener('pointerdown',function(e){
   var t=e.target,w=toWorld(e);try{svg.setPointerCapture(e.pointerId);}catch(x){}
-  if(e.button===1||space||S.tool==='pan'||S.view==='sheet'){drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
+  if(e.button===1||space||S.view==='sheet'){drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
   if(S.tool==='measure'){var p=snap(w);if(!S.meas||S.meas.b)S.meas={a:p,b:null,h:p};else S.meas.b=p;render();return;}
   if(S.tool==='select'){var id=t.dataset&&t.dataset.id?+t.dataset.id:0;
     if(id){if(e.shiftKey){if(S.sel.has(id))S.sel.delete(id);else S.sel.add(id);}else if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);}
@@ -733,11 +787,11 @@ svg.addEventListener('pointerdown',function(e){
     else drag={k:'marq',a:w,b:w,add:e.shiftKey};return;}
   if(S.tool==='node'){var k=t.dataset&&t.dataset.n;
     if(k){if(e.shiftKey){if(S.nsel.has(k))S.nsel.delete(k);else S.nsel.add(k);}else if(!S.nsel.has(k)){S.nsel.clear();S.nsel.add(k);}
-      var a=k.split(':'),q=byId(+a[0]).pts[+a[1]];drag={k:'nmove',grab:k,moved:false,alt:e.altKey};refresh();}
+      drag={k:'nmove',grab:k,moved:false};refresh();}
     else drag={k:'marq',a:w,b:w,add:e.shiftKey,nodes:true};}
 });
 svg.addEventListener('pointermove',function(e){
-  var w=toWorld(e);$('stPos').textContent='X '+w.x.toFixed(1)+'  Y '+w.y.toFixed(1)+' mm';
+  var w=toWorld(e);info.pos=n1(w.x)+' / '+n1(w.y)+' mm';showInfo();
   if(S.tool==='measure'&&S.meas&&!S.meas.b&&!drag){S.meas.h=snap(w);schedule();return;}
   if(!drag)return;
   if(drag.k==='pan'){S.tx=drag.tx+e.clientX-drag.x;S.ty=drag.ty+e.clientY-drag.y;schedule();}
@@ -753,7 +807,7 @@ function endDrag(){
   if(d.k==='marq'){var x0=Math.min(d.a.x,d.b.x),x1=Math.max(d.a.x,d.b.x),y0=Math.min(d.a.y,d.b.y),y1=Math.max(d.a.y,d.b.y),tiny=(x1-x0)*S.z<4&&(y1-y0)*S.z<4;
     if(d.nodes){if(!d.add)S.nsel.clear();if(!tiny)nodes().forEach(function(n){if(n.x>=x0&&n.x<=x1&&n.y>=y0&&n.y<=y1)S.nsel.add(n.k);});}
     else{if(!d.add)S.sel.clear();if(!tiny)S.paths.forEach(function(p){var b=bboxOf([p]);if(b.x<=x1&&b.x+b.w>=x0&&b.y<=y1&&b.y+b.h>=y0)S.sel.add(p.id);});}}
-  refresh();
+  if(d.k!=='pan')refresh();
 }
 svg.addEventListener('pointerup',endDrag);svg.addEventListener('pointercancel',endDrag);
 svg.addEventListener('dblclick',function(e){
@@ -767,7 +821,7 @@ window.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return;}
   if(e.ctrlKey||e.metaKey)return;
   var k=e.key.toLowerCase();
-  if(k==='v')setTool('select');else if(k==='a')setTool('node');else if(k==='m')setTool('measure');else if(k==='h')setTool('pan');
+  if(k==='v')setTool('select');else if(k==='a')setTool('node');else if(k==='m')setTool('measure');
   else if(k==='delete'||k==='backspace'){e.preventDefault();del();}
   else if(k==='escape'){S.sel.clear();S.nsel.clear();S.meas=null;refresh();}
   else if(k.indexOf('arrow')===0&&S.view==='die'){var s=e.shiftKey?1:0.1,d={arrowleft:[-s,0],arrowright:[s,0],arrowup:[0,-s],arrowdown:[0,s]}[k];
@@ -776,34 +830,31 @@ window.addEventListener('keydown',function(e){
 window.addEventListener('keyup',function(e){if(e.key===' ')space=false;});
 window.addEventListener('resize',function(){render();});
 
-/* --- import --- */
+/* --- wczytywanie --- */
 function finishImport(paths,name){
   paths=paths.filter(function(p){return p.pts&&p.pts.length>1&&p.pts.every(function(q){return isFinite(q.x)&&isFinite(q.y);});});
-  if(!paths.length){toast('W pliku nie znalazłem ścieżek wektorowych. Sprawdź, czy linie nie są obrazem albo tekstem.');return;}
+  if(!paths.length){toast('W pliku nie ma linii wektorowych. Sprawdź, czy to nie obraz albo tekst.');return;}
   var b=bboxOf(paths),tm={};
   S.paths=paths.map(function(p){var q=mapPath(p,function(x,y){return [x-b.x,y-b.y];});q.id=S.nid++;q.src=p.src;q.type=tm[p.src]||(tm[p.src]=guessType(p.src));return q;});
-  S.undo=[];S.sel.clear();S.nsel.clear();S.name=name.replace(/\.[^.]+$/,'');S.sample=false;S.view='die';
-  $('vDie').setAttribute('aria-pressed','true');$('vSheet').setAttribute('aria-pressed','false');
-  refresh();fitView();toast('Wczytano ścieżek: '+S.paths.length+'. Sprawdź typy linii w panelu po prawej.');
+  S.undo=[];S.sel.clear();S.nsel.clear();S.name=name.replace(/\.[^.]+$/,'');
+  refresh(true);fitView();toast('Wczytano '+S.paths.length+' linii. Sprawdź kartę Linie.');
 }
 function cssHex(c){var m=/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s\/]+([\d.]+))?/.exec(c||'');if(!m||(m[4]!==undefined&&+m[4]===0))return null;return hex(+m[1],+m[2],+m[3]);}
 function importSVG(text){
   var doc=new DOMParser().parseFromString(text,'image/svg+xml'),root=doc.documentElement;
-  if(!root||root.nodeName.toLowerCase()!=='svg')throw new Error('To nie jest poprawny plik SVG.');
+  if(!root||root.nodeName.toLowerCase()!=='svg')throw new Error('to nie jest poprawny plik SVG');
   root.querySelectorAll('script,foreignObject,image,text').forEach(function(n){n.remove();});
   var host=document.createElement('div');host.style.cssText='position:absolute;left:-99999px;top:0;width:10px;height:10px;overflow:hidden;visibility:hidden';
   var node=document.importNode(root,true);host.appendChild(node);document.body.appendChild(host);
   var out=[];
   try{
-    var vb=(node.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number),wA=node.getAttribute('width')||'',um=/^([\d.]+)\s*(mm|cm|in|pt|px)?$/.exec(wA.trim());
-    var U={mm:1,cm:10,'in':25.4,pt:25.4/72,px:25.4/96},mode=$('unit').value,sc,base=[1,0,0,1,0,0];
+    var vb=(node.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number),um=/^([\d.]+)\s*(mm|cm|in|pt|px)?$/.exec((node.getAttribute('width')||'').trim());
+    var U={mm:1,cm:10,'in':25.4,pt:25.4/72,px:25.4/96},sc,base=[1,0,0,1,0,0];
     if(vb.length===4&&vb[2]>0)base=[1,0,0,1,-vb[0],-vb[1]];
-    if(mode==='auto'){if(um&&um[2]&&vb.length===4&&vb[2]>0)sc=parseFloat(um[1])*U[um[2]]/vb[2];else if(um&&um[2])sc=U[um[2]];else sc=25.4/72;}
-    else sc=U[mode];
+    if(um&&um[2]&&vb.length===4&&vb[2]>0)sc=parseFloat(um[1])*U[um[2]]/vb[2];else if(um&&um[2])sc=U[um[2]];else sc=25.4/72;
     base=mmul([sc,0,0,sc,0,0],base);
-    var skip='defs,clipPath,mask,pattern,symbol,marker';
     node.querySelectorAll('path,rect,circle,ellipse,line,polyline,polygon').forEach(function(el){
-      if(el.closest(skip))return;
+      if(el.closest('defs,clipPath,mask,pattern,symbol,marker'))return;
       var chain=[],n=el;while(n&&n!==node){chain.unshift(n);n=n.parentNode;}
       var m=base;chain.forEach(function(c){var t=c.getAttribute&&c.getAttribute('transform');if(t)m=mmul(m,parseTransform(t));});
       var cs=getComputedStyle(el);if(cs.display==='none')return;
@@ -820,7 +871,7 @@ function importSVG(text){
   }finally{host.remove();}
   return out;
 }
-function loadScript(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('Nie udało się pobrać biblioteki do odczytu PDF. Sprawdź połączenie z internetem.'));};document.head.appendChild(s);});}
+function loadScript(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('brak połączenia z internetem (potrzebne do PDF)'));};document.head.appendChild(s);});}
 var PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 async function importPDF(buf){
   if(!window.pdfjsLib){await loadScript(PDFJS+'pdf.min.js');await loadScript(PDFJS+'pdf.worker.min.js');}
@@ -832,37 +883,35 @@ async function openFile(file){
   if(!file)return;var ext=(file.name.split('.').pop()||'').toLowerCase();
   try{
     if(ext==='svg')finishImport(importSVG(await file.text()),file.name);
-    else if(ext==='dxf'){var u={mm:1,'in':25.4,pt:25.4/72,px:25.4/96}[$('unit').value];finishImport(parseDXF(await file.text(),u),file.name);}
+    else if(ext==='dxf')finishImport(parseDXF(await file.text()),file.name);
     else if(ext==='pdf'){toast('Czytam PDF…');finishImport(await importPDF(await file.arrayBuffer()),file.name);}
-    else toast('Obsługuję pliki SVG, DXF i PDF. Plik AI zapisz jako PDF albo SVG.');
-  }catch(err){toast('Nie udało się wczytać pliku: '+(err&&err.message||err));}
+    else toast('Wczytuję SVG, DXF i PDF. Plik AI zapisz jako PDF.');
+  }catch(err){toast('Nie udało się wczytać: '+(err&&err.message||err)+'.');}
 }
 $('fileIn').addEventListener('change',function(e){openFile(e.target.files[0]);e.target.value='';});
-document.querySelector('label[for=fileIn]').addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileIn').click();}});
+document.querySelector('.top label[for=fileIn]').addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileIn').click();}});
 var dz=$('drop');
 window.addEventListener('dragover',function(e){e.preventDefault();dz.style.display='flex';});
 window.addEventListener('dragleave',function(e){if(!e.relatedTarget)dz.style.display='none';});
 window.addEventListener('drop',function(e){e.preventDefault();dz.style.display='none';if(e.dataTransfer.files[0])openFile(e.dataTransfer.files[0]);});
 
-/* --- eksport --- */
+/* --- zapis --- */
 function job(){
   var c=cfg();
   if(S.view==='sheet'){var L=layoutSheet(S.paths,c);if(!L||!L.count)return null;return {items:jobItems(S.paths,L),W:c.W,H:c.H,marks:markList(c),name:S.name+'_arkusz_'+L.count+'szt'};}
   var ord=orderPaths(S.paths);if(!ord.length)return null;var b=bboxOf(ord),pad=5;
   return {items:ord.map(function(p){return mapPath(p,function(x,y){return [x-b.x+pad,y-b.y+pad];});}),W:b.w+2*pad,H:b.h+2*pad,marks:[],name:S.name+'_wykrojnik'};
 }
-async function save(filename,data){
-  if(dl){try{await dl.save({filename:filename,data:data});toast('Zapisano '+filename);}
-    catch(e){if(!e||e.code!=='declined')toast('Nie udało się zapisać pliku'+(e&&e.message?': '+e.message:'.'));}return;}
-  try{var a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data]));a.download=filename;document.body.appendChild(a);a.click();a.remove();toast('Zapisuję '+filename);}
-  catch(e){toast('Ta przeglądarka zablokowała zapis pliku.');}
+function save(filename,data,mime){
+  try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime}));a.download=filename;document.body.appendChild(a);a.click();a.remove();toast('Zapisano '+filename);}
+  catch(e){toast('Przeglądarka zablokowała zapis pliku.');}
 }
 function exportAs(kind){
-  var j=job();if(!j){toast(S.view==='sheet'?'Użytek nie mieści się na arkuszu. Zmień arkusz, margines albo obrót.':'Nie ma linii do zapisania.');return;}
+  var j=job();if(!j){toast(S.view==='sheet'?'Wykrojnik nie mieści się na arkuszu.':'Nie ma linii do zapisania.');return;}
   var n=j.name.replace(/[^\w\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g,'_');
-  if(kind==='dxf'){var dx=writeDXF(j.items,j.H,j.marks);if(dl)save(n+'_dxf.zip',zipStore(n+'.dxf',dx));else save(n+'.dxf',dx);}
-  else if(kind==='pdf')save(n+'.pdf',writePDF(j.items,j.W,j.H,j.marks));
-  else save(n+'.svg',writeSVG(j.items,j.W,j.H,j.marks));
+  if(kind==='dxf')save(n+'.dxf',writeDXF(j.items,j.H,j.marks),'application/dxf');
+  else if(kind==='pdf')save(n+'.pdf',writePDF(j.items,j.W,j.H,j.marks),'application/pdf');
+  else save(n+'.svg',writeSVG(j.items,j.W,j.H,j.marks),'image/svg+xml');
 }
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
