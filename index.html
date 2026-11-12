@@ -149,6 +149,7 @@ button{cursor:pointer}
           <div class="f"><label class="f__label" for="bW">Wysokość</label><input type="number" id="bW" step="0.5" min="1"></div>
           <div class="f"><label class="f__label" for="bG">Głębokość</label><input type="number" id="bG" step="0.5" min="1"></div>
         </div>
+        <label class="check"><input type="checkbox" id="bLock"> Zachowaj proporcje (albo przytrzymaj Shift)</label>
         <p class="note">Wymiar zewnętrzny w mm. Ścianki liczą się z niego same.</p>
         <div class="f"><span class="f__label">Zacznij od</span><div class="chips" id="tpl"><button type="button" data-tpl="tuck">Pudełko z zakładkami</button><button type="button" data-tpl="tray">Taca</button><button type="button" data-tpl="one">Jedna ścianka</button></div></div>
       </div>
@@ -715,7 +716,10 @@ var S={paths:[],sel:new Set(),nsel:new Set(),mode:'box',box:null,selP:null,polys
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
 var LBL={cut:'Cięcie',crease:'Bigowanie',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
-var drag=null,space=false,raf=0,editing=false;
+var drag=null,space=false,raf=0,editing=false,shift=false;
+window.addEventListener('keydown',function(e){shift=e.shiftKey;},true);window.addEventListener('keyup',function(e){shift=e.shiftKey;},true);window.addEventListener('blur',function(){shift=false;});
+/* Shift przy przeciąganiu: ruch tylko w poziomie, w pionie albo po skosie 45° */
+function constrain(o,w){var dx=w.x-o.x,dy=w.y-o.y,ax=Math.abs(dx),ay=Math.abs(dy);if(ax>2*ay)dy=0;else if(ay>2*ax)dx=0;else{var m=Math.max(ax,ay);dx=(dx<0?-m:m);dy=(dy<0?-m:m);}return {x:o.x+dx,y:o.y+dy};}
 
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function n1(v){return v.toFixed(1).replace('.',',');}
@@ -781,7 +785,9 @@ function closeMenu(){menu.style.display='none';menuAt=null;}
 menu.addEventListener('click',function(e){var b=e.target.closest('[data-kind]');if(!b||!menuAt)return;pushUndo();var id=1;S.box.panels.forEach(function(q){id=Math.max(id,q.id+1);});
   S.box.panels.push({id:id,kind:b.dataset.kind,parent:menuAt.id,edge:menuAt.edge,ext:defExt(b.dataset.kind,panel(menuAt.id),menuAt)});S.selP=id;closeMenu();boxChanged(true);});
 window.addEventListener('pointerdown',function(e){if(menuAt&&!e.target.closest('#menu')&&!e.target.closest('[data-plus]'))closeMenu();},true);
-['bS','bW','bG'].forEach(function(id){$(id).addEventListener('input',function(){var v=parseFloat($(id).value);if(!(v>=1)||!S.box)return;startEdit();S.box.P[id.charAt(1)]=v;boxChanged(false);});});
+['bS','bW','bG'].forEach(function(id){$(id).addEventListener('input',function(){var v=parseFloat($(id).value);if(!(v>=1)||!S.box)return;startEdit();var key=id.charAt(1),old=S.box.P[key];
+  if((shift||$('bLock').checked)&&old>0){var f=v/old;['S','W','G'].forEach(function(k){if(k!==key)S.box.P[k]=Math.max(1,Math.round(S.box.P[k]*f*10)/10);});syncBox();}
+  S.box.P[key]=v;boxChanged(false);});});
 $('tpl').addEventListener('click',function(e){var t=e.target.dataset.tpl;if(!t)return;pushUndo();newBox(t);refresh();renderPanelCard();fitView();});
 $('bNew').addEventListener('click',function(){pushUndo();setMode('box',true);newBox('tuck');setTool('select');renderPanelCard();fitView();});
 $('bFlat').addEventListener('click',function(){pushUndo();S.paths.forEach(function(p){p.id=S.nid++;});setMode('file');refresh(true);toast('Teraz edytujesz linie i punkty. Wymiary pudełka już nie przeliczają wykrojnika.');});
@@ -971,11 +977,11 @@ svg.addEventListener('pointerdown',function(e){
     drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
   if(S.tool==='select'){var id=t.dataset&&t.dataset.id?+t.dataset.id:0;
     if(id){if(e.shiftKey){if(S.sel.has(id))S.sel.delete(id);else S.sel.add(id);}else if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);}
-      drag={k:'move',last:w,moved:false};refresh();}
+      drag={k:'move',last:w,start:w,moved:false};refresh();}
     else drag={k:'marq',a:w,b:w,add:e.shiftKey};return;}
   if(S.tool==='node'){var k=t.dataset&&t.dataset.n;
     if(k){if(e.shiftKey){if(S.nsel.has(k))S.nsel.delete(k);else S.nsel.add(k);}else if(!S.nsel.has(k)){S.nsel.clear();S.nsel.add(k);}
-      drag={k:'nmove',grab:k,moved:false};refresh();}
+      var gq=byId(+k.split(':')[0]).pts[+k.split(':')[1]];drag={k:'nmove',grab:k,moved:false,orig:{x:gq.x,y:gq.y}};refresh();}
     else drag={k:'marq',a:w,b:w,add:e.shiftKey,nodes:true};}
 });
 svg.addEventListener('pointermove',function(e){
@@ -983,9 +989,9 @@ svg.addEventListener('pointermove',function(e){
   if(S.tool==='measure'&&S.meas&&!S.meas.b&&!drag){S.meas.h=snap(w);schedule();return;}
   if(!drag)return;
   if(drag.k==='pan'){S.tx=drag.tx+e.clientX-drag.x;S.ty=drag.ty+e.clientY-drag.y;schedule();}
-  else if(drag.k==='move'){var dx=w.x-drag.last.x,dy=w.y-drag.last.y;if(!drag.moved){if(Math.hypot(dx,dy)*S.z<3)return;pushUndo();drag.moved=true;}
-    S.paths.forEach(function(p){if(S.sel.has(p.id))movePath(p,dx,dy);});drag.last=w;schedule();}
-  else if(drag.k==='nmove'){var a=drag.grab.split(':'),g=byId(+a[0]).pts[+a[1]],tg=e.altKey?w:snap(w,true),ddx=tg.x-g.x,ddy=tg.y-g.y;
+  else if(drag.k==='move'){var cw=e.shiftKey&&drag.moved?constrain(drag.start,w):w,dx=cw.x-drag.last.x,dy=cw.y-drag.last.y;if(!drag.moved){if(Math.hypot(dx,dy)*S.z<3)return;pushUndo();drag.moved=true;}
+    S.paths.forEach(function(p){if(S.sel.has(p.id))movePath(p,dx,dy);});drag.last=cw;schedule();}
+  else if(drag.k==='nmove'){var a=drag.grab.split(':'),g=byId(+a[0]).pts[+a[1]],tg=e.shiftKey?constrain(drag.orig,w):e.altKey?w:snap(w,true),ddx=tg.x-g.x,ddy=tg.y-g.y;
     if(!drag.moved){if(Math.hypot(w.x-g.x,w.y-g.y)*S.z<3)return;pushUndo();drag.moved=true;}
     S.nsel.forEach(function(k){var b=k.split(':'),p=byId(+b[0]);if(p)moveNode(p,+b[1],ddx,ddy);});schedule();}
   else if(drag.k==='marq'){drag.b=w;schedule();}
@@ -1104,7 +1110,7 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.7';$('ver').textContent='v'+VERSION;
+var VERSION='2026.11.12.8';$('ver').textContent='v'+VERSION;
 var latest='';
 function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
 function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
