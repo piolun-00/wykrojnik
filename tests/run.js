@@ -9,7 +9,7 @@ const cutShape = r => r.paths.filter(p => p.type === 'cut').map(p => p.pts.lengt
 ok('szablony dają jeden zamknięty obrys i nie kolidują', () => {
   for (const fold of ['crease', 'vin', 'vout']) for (const t of ['tuck', 'tray', 'sleeve', 'mailer', 'one']) {
     const r = C.buildBox({ P: { S: 60, W: 100, G: 40, t: 0.5, fold }, panels: C.boxTemplate(t) });
-    assert.match(cutShape(r), /^\d+c$/, t + '/' + fold + ': ' + cutShape(r));
+    assert.match(cutShape(r), t === 'mailer' ? /^\d+c(,4c){4}$/ : /^\d+c$/, t + '/' + fold + ': ' + cutShape(r));
     assert.strictEqual(Object.keys(r.clash).length, 0, t + ' kolizja');
   }
 });
@@ -48,6 +48,15 @@ ok('obrys bez wiszących nacięć (odcinków tam i z powrotem)', () => {
         assert.ok(!(la > 1e-6 && lb > 1e-6 && Math.abs(ax * by - ay * bx) < 1e-6 * la * lb && ax * bx + ay * by < 0), tp + ' t=' + tt + ' wąs przy ' + q.x + ',' + q.y); } });
   }
 });
+ok('pudełko wysyłkowe: zawijane boki, wypustki i szczeliny w dnie; punkty dodane i usunięte', () => {
+  for (const tt of [0.5, 1.5, 3]) { const r = C.buildBox({ P: { S: 200, W: 60, G: 150, t: tt, fold: 'crease' }, panels: C.boxTemplate('mailer') });
+    assert.match(cutShape(r), /^\d+c,4c,4c,4c,4c$/, cutShape(r)); assert.strictEqual(Object.keys(r.clash).length, 0); }
+  const box = { P: { S: 60, W: 100, G: 40, t: 0.5, fold: 'crease' }, panels: C.boxTemplate('tuck'), splits: [], dels: [], ov: {} };
+  let r = C.buildBox(box); const cp = r.paths.find(p => p.type === 'cut'), n0 = cp.pts.length;
+  box.splits.push({ id: 1, a: cp.pts[10].ks, b: cp.pts[11].ks, t: 0.5 }); r = C.buildBox(box);
+  assert.strictEqual(r.paths.find(p => p.type === 'cut').pts.length, n0 + 1);
+  box.dels.push(cp.pts[20].ks[0]); box.P.W = 120; r = C.buildBox(box); const c3 = r.paths.find(p => p.type === 'cut'); assert.strictEqual(c3.pts.length, n0); assert.ok(c3.closed);
+});
 ok('DXF, PDF i SVG: zapis i odczyt', () => {
   const S = C.samplePaths(); S.forEach((p, i) => p.id = i + 1);
   const cfg = { W: 1010, H: 720, m: 12, gap: 3, max: 0, rot: 'auto', corner: 'tl', mk: 5 }, L = C.layoutSheet(S, cfg);
@@ -64,7 +73,7 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<link[^>]*>/g, '')
   .replace(/<script src="(app\/[a-z.]+)(\?v=[^"]*)?"><\/script>/g, (m, f) => '<script>' + fs.readFileSync(path.join(root, f), 'utf8') + '</script>');
 const errors = [], vc = new VirtualConsole(); vc.on('jsdomError', e => errors.push(e.message + ' ' + ((e.detail && e.detail.stack) || '').split('\n').slice(0, 3).join(' | ')));
-const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc, url: 'https://example.test/' });
 const w = dom.window, d = w.document, g = id => d.getElementById(id), cv = g('cv');
 const ev = (el, t) => el.dispatchEvent(new w.Event(t, { bubbles: true }));
 const pe = (el, t, x, y, o) => el.dispatchEvent(new w.MouseEvent(t, Object.assign({ bubbles: true, button: 0, clientX: x, clientY: y }, o || {})));
@@ -98,6 +107,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const n0 = nd[0], x = +n0.getAttribute('x') + 3.5, y = +n0.getAttribute('y') + 3.5; dragOn(n0, x, y, x + 20, y - 10, { altKey: true });
     assert.ok(!g('bOv').hidden); key('Escape'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
     g('bOv').click(); assert.ok(g('bOv').hidden);
+    click(60, 60); key('Enter'); const nn = d.querySelectorAll('.nd').length; cv.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, clientX: 100, clientY: 40 }));
+    assert.strictEqual(d.querySelectorAll('.nd').length, nn + 1, 'dwuklik dodaje punkt pudełka'); key('Delete'); assert.strictEqual(d.querySelectorAll('.nd').length, nn); key('Escape');
   });
   await oka('rysowanie: prostokąt z Shift, wielokąt z liczbą boków, przypięcie do ścianki', async () => {
     key('r'); dragOn(cv, 60, 100, 100, 130, { shiftKey: true });
@@ -134,6 +145,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const hd = d.querySelector('.hd'); dragOn(hd, +hd.getAttribute('cx'), +hd.getAttribute('cy'), +hd.getAttribute('cx') + 10, +hd.getAttribute('cy') + 10); await wait(40);
     assert.ok(d.querySelector('.hit').getAttribute('d').includes('C')); key('Delete'); assert.strictEqual(d.querySelectorAll('.nd').length, 3); key('Escape');
   });
+  await oka('prostokąt → ścianka, autozapis i plik projektu', async () => {
+    pe(cv, 'pointerdown', 2400, 2400); pe(cv, 'pointermove', -900, -900); pe(cv, 'pointerup', -900, -900); await wait(30); key('Delete');
+    assert.ok(g('status').textContent.includes('Pusty')); key('r'); dragOn(cv, 100, 100, 220, 300); assert.ok(!g('bWall').hidden); g('bWall').click();
+    assert.ok(!d.querySelector('[data-card=box]').hidden); assert.strictEqual(d.querySelectorAll('.plus').length, 4); assert.strictEqual(g('bS').value, '60'); assert.strictEqual(g('bW').value, '100');
+    await wait(650); const saved = JSON.parse(w.localStorage.getItem('wykr-doc')); assert.strictEqual(saved.app, 'khorei-wykrojnik'); assert.strictEqual(saved.box.P.S, 60); assert.ok(g('saved').textContent.startsWith('Zapisano'));
+    d.querySelector('[data-tpl=tuck]').click();
+  });
   await oka('impozycja od rogu, cofanie, zamiana na linie, zapis', async () => {
     d.querySelector('[data-card=arkusz] .card__title').click(); assert.ok(/szt\./.test(g('impBig').textContent)); assert.ok(d.querySelector('#world use').getAttribute('transform').startsWith('translate(12 12)'));
     d.querySelector('[data-corner=br]').click(); assert.ok(!d.querySelector('#world use').getAttribute('transform').startsWith('translate(12 12)'));
@@ -141,6 +159,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     for (const t of ['mailer', 'tray', 'sleeve', 'tuck']) { d.querySelector('[data-tpl=' + t + ']').click(); assert.ok(!g('status').textContent.includes('nachodzą'), t); }
     const nb = d.querySelectorAll('.hit').length; g('bFlat').click(); assert.ok(d.querySelector('[data-card=box]').hidden); assert.ok(d.querySelectorAll('.hit').length > nb);
     g('bUndo').click(); assert.ok(!d.querySelector('[data-card=box]').hidden); g('exDxf').click(); g('exPdf').click(); g('exSvg').click();
+  });
+  await oka('po odświeżeniu strona wraca do zapisanej pracy', async () => {
+    g('bS').value = '77'; ev(g('bS'), 'input'); key('r'); dragOn(cv, 60, 100, 100, 130); await wait(650);
+    const stored = w.localStorage.getItem('wykr-doc'), e2 = [], vc2 = new VirtualConsole(); vc2.on('jsdomError', e => e2.push(e.message));
+    const dom2 = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc2, url: 'https://example.test/', beforeParse(win) { win.localStorage.setItem('wykr-doc', stored); } });
+    await wait(150); const d2 = dom2.window.document; assert.deepStrictEqual(e2, []);
+    assert.strictEqual(d2.getElementById('bS').value, '77'); assert.strictEqual(d2.querySelectorAll('.hit').length, d.querySelectorAll('.hit').length); assert.ok(d2.querySelectorAll('.plus').length > 0);
   });
   await wait(50);
   assert.deepStrictEqual(errors, [], 'błędy skryptu:\n' + errors.join('\n'));

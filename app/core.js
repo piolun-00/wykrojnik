@@ -424,10 +424,14 @@ function boxTemplate(name){
   }else if(name==='sleeve'){
     root('S','W');var a1=W(1,'r','G',0),a2=W(a1,'o','S',0),a3=W(a2,'o','G',-1);F(a3,'o','glue');
   }else if(name==='mailer'){
-    /* uproszczone pudełko wysyłkowe: dno, cztery ścianki, wieczko z klapą wchodzącą za przednią ściankę */
-    root('S','G');var bk2=W(1,'t','W',0),lid2=W(bk2,'o','G',0),fr=W(1,'b','W',0),l=W(1,'l','W',0),r=W(1,'r','W',0);
-    W(lid2,'o','W',-1);F(lid2,'a','dust');F(lid2,'b','dust');
-    F(l,'a','glue');F(l,'b','glue');F(r,'a','glue');F(r,'b','glue');
+    /* pudełko wysyłkowe (układ FEFCO 0427): dno, tył z wieczkiem i klapą, przód, boki zawijane podwójnie z wypustkami w szczelinach dna;
+       uszy przodu, tyłu i wieczka chowają się w zawinięciu boków */
+    root('S','G');var bk2=W(1,'t','W',0),lid2=W(bk2,'o','G',0),fr=W(1,'b','W',0);
+    W(lid2,'o','W',-1);
+    var ear=function(par,edge,base,mul){ps.push({id:n++,kind:'dust',parent:par,edge:edge,ext:{base:base,mul:mul,kt:0},sink:{kt:0}});};
+    ear(bk2,'a','G',0.45);ear(bk2,'b','G',0.45);ear(fr,'a','G',0.45);ear(fr,'b','G',0.45);ear(lid2,'a','W',0.8);ear(lid2,'b','W',0.8);
+    ['l','r'].forEach(function(e){var o=W(1,e,'W',0),sp=n;ps.push({id:n++,kind:'wall',parent:o,edge:'o',ext:{base:'num',val:0,kt:2}});
+      var inn=W(sp,'o','W',-2);ps.push({id:n++,kind:'tab',parent:inn,edge:'o',ext:{base:'num',val:3,kt:1}});});
   }else{
     /* ścianka z klejeniem i wieczka z zakładką są krótsze o 1 × grubość: klapka klejowa i zakładka chowają się POD sąsiednią ściankę.
        tylna ścianka ma wolne boki obniżone pod wieczko (under:1) */
@@ -450,7 +454,8 @@ function polysOverlap(A,B,eps){
   return true;
 }
 function buildBox(box){
-  var P=box.P,kids={},out={paths:[],polys:{},plus:[],labels:[],frames:{},dims:{},clash:{}},root=null,ov=box.ov||{},slits=[];
+  var P=box.P,kids={},out={paths:[],polys:{},plus:[],labels:[],frames:{},dims:{},clash:{}},root=null,ov=box.ov||{},slits=[],fr={},byIdP={};
+  box.panels.forEach(function(p){byIdP[p.id]=p;});
   P.h=(FOLD[P.fold]!=null?FOLD[P.fold]:0.5)*P.t;
   box.panels.forEach(function(p){if(p.parent==null)root=p;else kids[p.parent+':'+p.edge]=p;});
   if(!root)return out;
@@ -464,6 +469,7 @@ function buildBox(box){
   function edge(p,key,F){
     var ch=kids[p.id+':'+key],base=p.id+'/'+key;
     if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)],base+'/x');plus(p,key,F);return;}
+    if(ch.kind==='tab'){place(ch,F,0);return;}
     /* klapki odsuwają się od krawędzi o wielokrotność grubości; klapka leżąca pod inną warstwą ma big cofnięty w głąb ścianki */
     var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
     var sk=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.sink&&ch.sink.kt!=null?ch.sink.kt:(ch.kind==='dust'?1:0))*P.t),F.len*0.3);
@@ -478,8 +484,9 @@ function buildBox(box){
     place(ch,sk>0.001?{O:pt(F,0,-sk),u:F.u,n:F.n,len:F.len}:F,ins);
   }
   function place(p,F,ins){
-    var ext=exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0),q=function(a,b){return pt(F,a,b);};out.dims[p.id]={ext:ext};
+    var ext=exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']&&kids[p.id+':o'].kind!=='tab'?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0),q=function(a,b){return pt(F,a,b);};out.dims[p.id]={ext:ext};
     if(p.kind==='wall'){
+      fr[p.id]=F;
       out.frames[p.id]={nx:F.n.x,ny:F.n.y,pos:F.O.x*Math.abs(F.n.x)+F.O.y*Math.abs(F.n.y)};
       out.polys[p.id]=[q(0,0),q(0,ext),q(len,ext),q(len,0)];
       var ce=q(len/2,ext/2);out.labels.push({id:p.id,x:ce.x,y:ce.y,a:len,b:ext});
@@ -489,6 +496,14 @@ function buildBox(box){
       if(da>0.001){emit('cut',[q(0,0),q(da,0),q(da,ext),q(0,ext)],p.id+'/a/x');plus(p,'a',Fa);}else edge(p,'a',Fa);
       if(!kids[p.id+':o']&&(da>0.001||db>0.001)){emit('cut',[q(da,ext),q(len-db,ext)],p.id+'/o/x');plus(p,'o',Fo);}else edge(p,'o',Fo);
       if(db>0.001){emit('cut',[q(len,0),q(len-db,0),q(len-db,ext),q(len,ext)],p.id+'/b/x');plus(p,'b',Fb);}else edge(p,'b',Fb);
+    }else if(p.kind==='tab'){
+      /* wypustki: przedłużenie ścianki bez bigu. Jeśli ścianka jest zawinięciem boku (bok → grzbiet → ścianka wewnętrzna), w dnie powstają szczeliny */
+      var tw=Math.min(25,len*0.2),cs=[len*0.25,len*0.75],tp=[q(0,0)];
+      cs.forEach(function(cx){tp.push(q(cx-tw/2,0),q(cx-tw/2,ext),q(cx+tw/2,ext),q(cx+tw/2,0));});tp.push(q(len,0));
+      emit('cut',tp,p.id+'/out');out.polys[p.id]=[q(0,0),q(0,ext),q(len,ext),q(len,0)];
+      var inn=byIdP[p.parent],spn=inn&&byIdP[inn.parent],outer=spn&&byIdP[spn.parent];
+      if(outer&&outer.kind==='wall'&&spn.edge==='o'&&inn.edge==='o'&&p.edge==='o'&&fr[outer.id]&&out.dims[spn.id]){var Fo=fr[outer.id],sd=out.dims[spn.id].ext,hw=(P.t+0.5)/2;
+        cs.forEach(function(cx,ci){var a0=cx-tw/2-0.5,a1=cx+tw/2+0.5;slits.push({type:'cut',src:'#ff0000',closed:true,fold:false,pts:[pt(Fo,a0,-sd-hw),pt(Fo,a1,-sd-hw),pt(Fo,a1,-sd+hw),pt(Fo,a0,-sd+hw)].map(function(v,vi){v.k=p.id+'/slot'+ci+'#'+vi;return v;})});});}
     }else if(p.kind==='tuck'){
       var r=Math.min(ext*0.6,(L1-L0)*0.25),k=0.5523*r,A=q(L0+r,ext),B=q(L1,ext-r),a1=q(L0,ext-r+k),a2=q(L0+r-k,ext),b1=q(L1-r+k,ext),b2=q(L1,ext-r+k);
       emit('cut',[q(L0,0),q(L0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(L1-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(L1,0)],p.id+'/out');
@@ -518,6 +533,9 @@ function buildBox(box){
     parts.forEach(function(iv,n){var k0=p.pts[0].k.split('#')[0]+(n?'~'+n:'');kept.push({type:p.type,src:p.src,closed:false,fold:true,pts:[{x:A.x+ux*iv[0],y:A.y+uy*iv[0],k:k0+'#0'},{x:A.x+ux*iv[1],y:A.y+uy*iv[1],k:k0+'#1'}]});});
   });
   out.paths=kept.concat(slits);
+  /* punkty dodane ręcznie na odcinku między dwoma punktami pudełka */
+  (box.splits||[]).forEach(function(sp){var done=false;out.paths.forEach(function(p){if(done)return;for(var i=1;i<p.pts.length;i++){var A=p.pts[i-1],B=p.pts[i],f=sp.a.indexOf(A.k)>=0&&sp.b.indexOf(B.k)>=0,r=sp.b.indexOf(A.k)>=0&&sp.a.indexOf(B.k)>=0;
+    if(f||r){var ni=splitAt(p,i,f?sp.t:1-sp.t);p.pts[ni].k='x'+sp.id+'#0';done=true;break;}}});});
   /* ręczne przesunięcia punktów (tryb punktów na pudełku) */
   out.paths.forEach(function(p){p.pts.forEach(function(q,i){var o=ov[q.k];if(o)moveNode(p,i,o.x,o.y);});});
   var loc={};out.paths.forEach(function(p){p.pts.forEach(function(q){var key=Math.round(q.x*1000)+','+Math.round(q.y*1000);(loc[key]=loc[key]||[]).push(q.k);});});
@@ -526,6 +544,9 @@ function buildBox(box){
   out.paths=out.paths.filter(function(p){return !j.gone[p.id];});
   cuts.forEach(function(p){if(!j.gone[p.id])removeSpikes(p);});
   out.paths.forEach(function(p){p.pts.forEach(function(q){q.ks=loc[Math.round(q.x*1000)+','+Math.round(q.y*1000)]||[q.k];});});
+  /* punkty usunięte ręcznie */
+  var dels=box.dels||[];
+  if(dels.length){out.paths.forEach(function(p){for(var i=p.pts.length-1;i>=0;i--){if(p.pts[i].ks.some(function(k){return dels.indexOf(k)>=0;}))deleteNode(p,i);}});out.paths=out.paths.filter(function(p){return p.pts.length>1;});}
   /* kolizje: ścianki, które nie są rodzicem i dzieckiem, a nachodzą na siebie */
   var ids=Object.keys(out.polys),par={};box.panels.forEach(function(p){par[p.id]=p.parent;});
   for(var x=0;x<ids.length;x++)for(var y=x+1;y<ids.length;y++){var ia=+ids[x],ib=+ids[y];if(par[ia]===ib||par[ib]===ia)continue;

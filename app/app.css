@@ -135,3 +135,5 @@ button{cursor:pointer}
 @media (max-width:1000px){.app.has--banner{grid-template-rows:auto 52px auto 62vh;grid-template-areas:"banner" "top" "panel" "preview"}}
 .hit.key{stroke-opacity:.55;stroke-width:11}
 .psel.key{fill-opacity:.12;stroke:var(--fg);stroke-width:2;vector-effect:non-scaling-stroke}
+.saved{color:var(--muted);white-space:nowrap}
+.saved.is--warn{color:#b25c00;font-weight:600}

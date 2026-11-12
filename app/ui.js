@@ -10,7 +10,7 @@ var S={free:[],bpaths:[],paths:[],box:null,ctx:'obj',boxSel:false,sel:new Set(),
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
 var LBL={cut:'Cięcie',crease:'Bigowanie',vcut:'Rowek V',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
-var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka'},BASE={S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
+var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka',tab:'Wypustki'},BASE={S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
 var DRAW={rect:1,ellipse:1,line:1,poly:1};
 var drag=null,space=false,raf=0,editing=false,shift=false;
 window.addEventListener('keydown',function(e){shift=e.shiftKey;},true);window.addEventListener('keyup',function(e){shift=e.shiftKey;},true);window.addEventListener('blur',function(){shift=false;});
@@ -52,16 +52,20 @@ function alignRef(sel){var k=keyOk();
   if(k&&k.t==='p'){var kp=byId(k.id);if(kp)return {box:bboxOf([kp]),skip:k.id};}
   if(S.selP!=null&&S.polys[S.selP])return {box:bboxOf([{pts:S.polys[S.selP],closed:true}])};
   return {box:bboxOf(sel.length>1?sel:active())};}
+function boxEdited(){var b=S.box;return !!b&&((b.ov&&Object.keys(b.ov).length>0)||(b.splits&&b.splits.length>0)||(b.dels&&b.dels.length>0));}
+/* zaznaczony pojedynczy prostokąt (cztery proste boki, poziomo-pionowo) da się zamienić na pierwszą ściankę pudełka */
+function rectSel(){if(S.sel.size!==1)return null;var p=selFree()[0];if(!p||!p.closed||p.pts.length!==4||p.pts.some(hasC))return null;var b=bboxOf([p]);
+  return p.pts.every(function(q){return (Math.abs(q.x-b.x)<0.01||Math.abs(q.x-b.x-b.w)<0.01)&&(Math.abs(q.y-b.y)<0.01||Math.abs(q.y-b.y-b.h)<0.01);})&&b.w>=1&&b.h>=1?{p:p,b:b}:null;}
 function selFree(){return S.free.filter(function(p){return S.sel.has(p.id);});}
 function panel(id){if(!S.box)return null;for(var i=0;i<S.box.panels.length;i++)if(S.box.panels[i].id===id)return S.box.panels[i];return null;}
 function setVal(id,v){var e=$(id);if(e&&document.activeElement!==e)e.value=v;}
 function foldNote(){var f=S.box?S.box.P.fold||'crease':$('fold').value;$('foldNote').textContent={crease:'Karton zgina się w połowie grubości: ścianka między zgięciami = wymiar zewnętrzny − 1 × grubość. Linie idą na warstwę CREASE.',vin:'Zawias zostaje na zewnętrznej warstwie: ścianka między zgięciami = wymiar zewnętrzny. Linie idą na warstwę VCUT. Arkusz tniesz stroną wewnętrzną do góry.',vout:'Zawias zostaje na wewnętrznej warstwie: ścianka = wymiar zewnętrzny − 2 × grubość. Linie idą na warstwę KISSCUT.'}[f];}
 function syncBox(){if(!S.box)return;$('fold').value=S.box.P.fold||'crease';foldNote();setVal('bS',S.box.P.S);setVal('bW',S.box.P.W);setVal('bG',S.box.P.G);}
-function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk(),fold:$('fold').value},off=S.box?S.box.off:{x:0,y:0};S.box={P:P,panels:boxTemplate(tpl),off:off,ov:{}};S.selP=null;regen();syncBox();}
+function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk(),fold:$('fold').value},off=S.box?S.box.off:{x:0,y:0};S.box={P:P,panels:boxTemplate(tpl),off:off,ov:{},splits:[],dels:[]};S.selP=null;regen();syncBox();}
 function exprOf(p,k){return k==='ext'?p.ext:p[k];}
 function jointBase(p){var par=panel(p.parent);if(par.parent==null)return (p.edge==='t'||p.edge==='b')?par.w.base:par.h.base;return p.edge==='o'?jointBase(par):par.ext.base;}
 function basesOf(p){return p.parent==null?[p.w.base,p.h.base]:[jointBase(p),p.ext.base];}
-function defExt(kind,par,at){if(kind==='glue')return {base:'num',val:12,kt:0};if(kind==='tuck')return {base:'num',val:15,kt:0};if(kind==='dust')return {base:'G',mul:0.5,kt:0};
+function defExt(kind,par,at){if(kind==='tab')return {base:'num',val:3,kt:1};if(kind==='glue')return {base:'num',val:12,kt:0};if(kind==='tuck')return {base:'num',val:15,kt:0};if(kind==='dust')return {base:'G',mul:0.5,kt:0};
   /* nowa ścianka: najpierw wymiar sąsiada z tego samego rzędu, potem ten wymiar pudełka, którego brakuje ściance obok */
   if(at){var q=null;S.plus.forEach(function(x){if(x.id===at.id&&x.edge===at.edge)q=x;});
     if(q){var pos=q.x*Math.abs(q.nx)+q.y*Math.abs(q.ny),twin=null;
@@ -81,8 +85,8 @@ function renderPanelCard(){
     h+=dimRow(p,'ext',p.kind==='wall'?'Wymiar ścianki':'Szerokość');
     if(p.kind==='wall'){var un=p.under||0;h+='<div class="f"><span class="f__label">Wolne boki pod wieczkiem</span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-under="'+n+'" aria-pressed="'+(un===n)+'">'+(n?n+(n>1?' warstwy':' warstwa'):'równo z bigiem')+'</button>';}).join('')+'</div><span class="f__hint">Obniża wolne boki tej ścianki, żeby wieczko leżało na nich płasko.</span></div>';}
     if(p.kind==='tuck'){var lk=p.lock||0;h+='<div class="f"><span class="f__label">Zamek</span><div class="chips">'+[0,4,8].map(function(n){return '<button type="button" data-lock="'+n+'" aria-pressed="'+(lk===n)+'">'+(n?n+' mm':'brak')+'</button>';}).join('')+'</div><span class="f__hint">Nacięcia na końcach bigu, za które zaczepiają się klapki boczne.</span></div>';}
-    if(p.kind!=='wall'){var gk=p.gap&&p.gap.kt!=null?p.gap.kt:1;h+='<div class="f"><span class="f__label">Odstęp od krawędzi<span class="pv">= '+n1(gk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2,3].map(function(n){return '<button type="button" data-gap="'+n+'" aria-pressed="'+(gk===n)+'">'+(n?n+' × grubość':'bez odstępu')+'</button>';}).join('')+'</div></div>';}
-    if(p.kind!=='wall'){var sk=p.sink&&p.sink.kt!=null?p.sink.kt:(p.kind==='dust'?1:0);h+='<div class="f"><span class="f__label">Cofnięcie bigu<span class="pv">= '+n1(sk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-sink="'+n+'" aria-pressed="'+(sk===n)+'">'+(n?n+' × grubość':'w linii ścianki')+'</button>';}).join('')+'</div><span class="f__hint">Dla klapki, która po złożeniu leży pod inną warstwą.</span></div>';}
+    if(p.kind!=='wall'&&p.kind!=='tab'){var gk=p.gap&&p.gap.kt!=null?p.gap.kt:1;h+='<div class="f"><span class="f__label">Odstęp od krawędzi<span class="pv">= '+n1(gk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2,3].map(function(n){return '<button type="button" data-gap="'+n+'" aria-pressed="'+(gk===n)+'">'+(n?n+' × grubość':'bez odstępu')+'</button>';}).join('')+'</div></div>';}
+    if(p.kind!=='wall'&&p.kind!=='tab'){var sk=p.sink&&p.sink.kt!=null?p.sink.kt:(p.kind==='dust'?1:0);h+='<div class="f"><span class="f__label">Cofnięcie bigu<span class="pv">= '+n1(sk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-sink="'+n+'" aria-pressed="'+(sk===n)+'">'+(n?n+' × grubość':'w linii ścianki')+'</button>';}).join('')+'</div><span class="f__hint">Dla klapki, która po złożeniu leży pod inną warstwą.</span></div>';}
     h+='<button class="btn is--danger" type="button" id="pDel">Usuń '+(p.kind==='wall'?'ściankę i wszystko za nią':'ten element')+'</button>';}
   box.innerHTML=h;$('subWall').textContent=p.parent==null?'pierwsza':KIND[p.kind].toLowerCase();updatePv();
 }
@@ -226,7 +230,7 @@ function renderDims(force){
 }
 function show(sel,on){document.querySelectorAll(sel).forEach(function(e){e.hidden=!on;});}
 function refresh(forceDims){
-  render();
+  render();autosave();
   var act=active(),b=bboxOf(act),len={cut:0,crease:0};
   var foldT={crease:1,vcut:1},boxFold=S.box?{crease:'crease',vin:'vcut',vout:'kiss'}[S.box.P.fold||'crease']:'';
   act.forEach(function(p){var l=pathLength(p);if(p.type==='cut')len.cut+=l;else if(foldT[p.type]||(p.type===boxFold&&S.bpaths.indexOf(p)>=0))len.crease+=l;});
@@ -237,7 +241,7 @@ function refresh(forceDims){
   $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.uc+' × '+L.ur+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':b?'Nie mieści się na arkuszu':'–';
   if(b){setVal('scW',(Math.round(b.w*10)/10).toString());setVal('scH',(Math.round(b.h*10)/10).toString());}
   show('[data-card=box],[data-card=wall],#bFlat',!!S.box);show('[data-card=plik],[data-card=wymiary]',!S.box&&S.free.length>0);show('[data-card=linie],#bJoin',S.free.length>0);
-  show('#align',S.ctx==='obj'&&S.sel.size>0);show('#bCurve',S.ctx==='nodes'&&S.edit.size>0);show('#bOv',!!S.box&&!!S.box.ov&&Object.keys(S.box.ov).length>0);show('#sidesBox',S.tool==='poly');
+  show('#align',S.ctx==='obj'&&S.sel.size>0);show('#bCurve',S.ctx==='nodes'&&S.edit.size>0);show('#bOv',boxEdited());show('#bWall',!S.box&&S.ctx==='obj'&&!!rectSel());show('#sidesBox',S.tool==='poly');
   renderDims(forceDims);
   var map={};groupList=[];
   S.free.forEach(function(p){var g=map[p.src];if(!g){g=map[p.src]={src:p.src,n:0,types:{}};groupList.push(g);}g.n++;g.types[p.type]=1;});
@@ -255,7 +259,7 @@ function refresh(forceDims){
 }
 var info={pos:'',sel:''};
 function showInfo(){var hint=S.view==='sheet'?'przeciągnij, żeby przesunąć widok':DRAW[S.tool]?'przeciągnij · Shift równo · Alt od środka':S.tool==='measure'?'kliknij dwa punkty':S.tool==='pan'?'przeciągnij widok':
-    S.ctx==='nodes'?(S.editBox?'przeciągnij punkt pudełka':'ramka zaznacza · dwuklik na linii dodaje punkt'):S.sel.size+(S.selP!=null?1:0)>1?'kliknij zaznaczony jeszcze raz, żeby równać do niego':S.box?'kliknij ściankę · plus dodaje · Enter otwiera punkty':'Enter albo dwuklik otwiera punkty';
+    S.ctx==='nodes'?(S.editBox?'przeciągnij punkt · dwuklik na linii dodaje · Delete usuwa':'ramka zaznacza · dwuklik na linii dodaje punkt'):S.sel.size+(S.selP!=null?1:0)>1?'kliknij zaznaczony jeszcze raz, żeby równać do niego':S.box?'kliknij ściankę · plus dodaje · Enter otwiera punkty':'Enter albo dwuklik otwiera punkty';
   $('info').textContent=[info.sel,info.pos,hint].filter(Boolean).join('  ·  ');}
 $('crumb').addEventListener('click',function(e){if(e.target.id==='crumbUp')leave();});
 
@@ -317,7 +321,11 @@ function moveSel(dx,dy){
 function del(){
   if(S.ctx==='obj'&&!S.sel.size&&S.selP!=null){delPanel();return;}
   if(S.ctx==='nodes'){if(!S.nsel.size){toast('Zaznacz punkty do usunięcia.');return;}var fk=[];S.nsel.forEach(function(k){if(k.charAt(0)!=='B')fk.push(k);});
-    if(!fk.length){toast('Punkty pudełka można tylko przesuwać.');return;}pushUndo();var by={};fk.forEach(function(k){var a=k.split(':');(by[a[0]]=by[a[0]]||[]).push(+a[1]);});
+    var bk=[];S.nsel.forEach(function(k){if(k.charAt(0)==='B'){var nd=nodeByKey(k);if(nd)bk.push(nd);}});
+    if(!fk.length&&!bk.length)return;pushUndo();
+    if(bk.length){S.box.splits=S.box.splits||[];S.box.dels=S.box.dels||[];bk.forEach(function(nd){var xk=null;nd.ks.forEach(function(k){if(k.charAt(0)==='x')xk=k;});
+      if(xk){var sid=+xk.slice(1).split('#')[0];S.box.splits=S.box.splits.filter(function(sp){return sp.id!==sid;});delete S.box.ov[xk];}else S.box.dels.push(nd.ks[0]);});regen();}
+    var by={};fk.forEach(function(k){var a=k.split(':');(by[a[0]]=by[a[0]]||[]).push(+a[1]);});
     Object.keys(by).forEach(function(id){var p=byId(+id);if(!p)return;by[id].sort(function(a,b){return b-a;}).forEach(function(i){deleteNode(p,i);});});
     S.free=S.free.filter(function(p){return p.pts.length>1;});compose();S.nsel.clear();if(!editNodes().length)leave(true);refresh(true);return;}
   if(!S.sel.size&&!S.boxSel){toast('Najpierw coś zaznacz.');return;}
@@ -330,7 +338,11 @@ $('bCurve').addEventListener('click',function(){var ks=[];S.nsel.forEach(functio
     else{if(pv&&pv!==q){q.c1x=pv.x+(q.x-pv.x)/3;q.c1y=pv.y+(q.y-pv.y)/3;q.c2x=pv.x+(q.x-pv.x)*2/3;q.c2y=pv.y+(q.y-pv.y)*2/3;}
       if(nx&&nx!==q){nx.c1x=q.x+(nx.x-q.x)/3;nx.c1y=q.y+(nx.y-q.y)/3;nx.c2x=q.x+(nx.x-q.x)*2/3;nx.c2y=q.y+(nx.y-q.y)*2/3;}}});
   refresh();});
-$('bOv').addEventListener('click',function(){if(!S.box)return;pushUndo();S.box.ov={};S.nsel.clear();boxChanged(true);});
+$('bOv').addEventListener('click',function(){if(!S.box)return;pushUndo();S.box.ov={};S.box.splits=[];S.box.dels=[];S.nsel.clear();boxChanged(true);});
+$('bWall').addEventListener('click',function(){var r=rectSel();if(!r||S.box)return;pushUndo();var rd=function(v){return Math.round(v*100)/100;};
+  S.free=S.free.filter(function(p){return p.id!==r.p.id;});S.sel.clear();
+  S.box={P:{S:rd(r.b.w),W:rd(r.b.h),G:40,t:thk(),fold:$('fold').value},panels:boxTemplate('one'),off:{x:r.b.x,y:r.b.y},ov:{},splits:[],dels:[]};S.selP=1;S.boxSel=true;
+  regen();syncBox();refresh(true);renderPanelCard();toast('Prostokąt jest teraz ścianką. Plusy przy krawędziach dodają kolejne.');});
 $('bDel').addEventListener('click',del);$('bUndo').addEventListener('click',undo);$('bFit').addEventListener('click',fitView);
 $('bJoin').addEventListener('click',function(){var set=S.sel.size?S.free.filter(function(p){return S.sel.has(p.id);}):S.free;pushUndo();
   var r=joinPaths(set,0.05);S.free=S.free.filter(function(p){return !r.gone[p.id];});compose();S.sel.clear();leave(true);refresh(true);
@@ -434,7 +446,10 @@ svg.addEventListener('dblclick',function(e){
     return;}
   if(S.ctx==='nodes'){var best=null;
     S.free.forEach(function(p){if(!S.edit.has(p.id))return;var n=nearestOnPath(p,w.x,w.y);if(n.d<8/S.z&&(!best||n.d<best.n.d))best={p:p,n:n};});
-    if(!best){if(S.editBox&&boxAt(w)!=null){toast('W pudełku punkty można tylko przesuwać.');return;}if(!(e.target.dataset&&(e.target.dataset.n||e.target.dataset.h)))leave();return;}
+    if(!best&&S.editBox){var bb=null;S.bpaths.forEach(function(p){var n=nearestOnPath(p,w.x,w.y);if(n.d<8/S.z&&(!bb||n.d<bb.n.d))bb={p:p,n:n};});
+      if(bb){var L=bb.p.pts.length,A=bb.p.pts[(bb.n.i-1+L)%L],B=bb.p.pts[bb.n.i];pushUndo();S.box.splits=S.box.splits||[];S.box.sid=(S.box.sid||0)+1;
+        S.box.splits.push({id:S.box.sid,a:A.ks.slice(),b:B.ks.slice(),t:bb.n.t});regen();S.nsel.clear();S.nsel.add('B|x'+S.box.sid+'#0');refresh();return;}}
+    if(!best){if(!(e.target.dataset&&(e.target.dataset.n||e.target.dataset.h)))leave();return;}
     pushUndo();var i=splitAt(best.p,best.n.i,best.n.t);S.nsel.clear();S.nsel.add(best.p.id+':'+i);refresh();}
 });
 window.addEventListener('keydown',function(e){
@@ -512,8 +527,9 @@ async function openFile(file){
   try{
     if(ext==='svg')finishImport(importSVG(await file.text()),file.name);
     else if(ext==='dxf')finishImport(parseDXF(await file.text()),file.name);
+    else if(ext==='json'){var dj=JSON.parse(await file.text());pushUndo();loadDoc(dj);fitView();toast('Wczytano projekt.');}
     else if(ext==='pdf'){toast('Czytam PDF…');finishImport(await importPDF(await file.arrayBuffer()),file.name);}
-    else toast('Wczytuję SVG, DXF i PDF. Plik AI zapisz jako PDF.');
+    else toast('Wczytuję SVG, DXF, PDF i plik projektu. Plik AI zapisz jako PDF.');
   }catch(err){toast('Nie udało się wczytać: '+(err&&err.message||err)+'.');}
 }
 $('fileIn').addEventListener('change',function(e){openFile(e.target.files[0]);e.target.value='';});
@@ -543,6 +559,25 @@ function exportAs(kind){
 }
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
+/* --- zapis pracy: autozapis w przeglądarce + plik projektu --- */
+function docState(){return {app:'khorei-wykrojnik',v:1,name:S.name,free:S.free,box:S.box,mat:+$('mat').value,thk:thk(),fold:$('fold').value,sides:S.sides,
+  imp:{W:$('iW').value,H:$('iH').value,M:$('iM').value,G:$('iG').value,Max:$('iMax').value,Mk:$('iMk').checked,rot:S.rot,corner:S.corner}};}
+function loadDoc(d){
+  if(!d||d.app!=='khorei-wykrojnik'||!Array.isArray(d.free))throw new Error('to nie jest plik projektu wykrojnika');
+  S.free=d.free;S.box=d.box||null;S.name=d.name||'wykrojnik';var mx=0;S.free.forEach(function(p){if(p.id>mx)mx=p.id;});S.nid=mx+1;
+  if(d.mat!=null)$('mat').value=String(d.mat);if(d.thk!=null)$('thk').value=d.thk;if(d.fold)$('fold').value=d.fold;if(d.sides)setSides(d.sides);
+  var im=d.imp||{};if(im.W)$('iW').value=im.W;if(im.H)$('iH').value=im.H;if(im.M!=null)$('iM').value=im.M;if(im.G!=null)$('iG').value=im.G;$('iMax').value=im.Max||'';$('iMk').checked=im.Mk!==false;
+  S.rot=im.rot||'auto';S.corner=im.corner||'tl';
+  $('rot').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.rot===S.rot?'true':'false');});
+  $('corner').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.corner===S.corner?'true':'false');});
+  S.sel.clear();S.boxSel=false;S.selP=null;S.key=null;leave(true);if(S.box){S.box.ov=S.box.ov||{};S.box.splits=S.box.splits||[];S.box.dels=S.box.dels||[];S.box.off=S.box.off||{x:0,y:0};}
+  regen();syncBox();foldNote();refresh(true);renderPanelCard();
+}
+var saveT=0;
+function autosave(){clearTimeout(saveT);saveT=setTimeout(function(){try{localStorage.setItem('wykr-doc',JSON.stringify(docState()));var n=new Date();$('saved').textContent='Zapisano '+('0'+n.getHours()).slice(-2)+':'+('0'+n.getMinutes()).slice(-2);$('saved').classList.remove('is--warn');}
+  catch(e){$('saved').textContent='Nie zapisano w przeglądarce';$('saved').classList.add('is--warn');}},500);}
+$('exProj').addEventListener('click',function(){save(S.name.replace(/[^\w\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g,'_')+'.wykrojnik.json',JSON.stringify(docState()),'application/json');});
+
 /* --- wersja jak w brandmanualu: numer nadaje wdrożenie (?v= przy plikach + version.json), strona co minutę pyta serwer i pokazuje pasek --- */
 var VERSION=(/[?&]v=([^&]+)/.exec(SCRIPT_SRC)||[])[1]||'dev';$('ver').textContent='v'+VERSION;
 function checkVersion(){if(VERSION==='dev'||location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){
@@ -551,7 +586,9 @@ $('bUpdate').addEventListener('click',function(){location.replace(location.pathn
 setInterval(checkVersion,60000);document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion();});checkVersion();
 
 /* --- start: przykładowe pudełko --- */
-foldNote();newBox('tuck');
+foldNote();
+var restored=false;try{var sd=localStorage.getItem('wykr-doc');if(sd){loadDoc(JSON.parse(sd));restored=true;}}catch(e){restored=false;}
+if(!restored)newBox('tuck');
 setTool('select');
 requestAnimationFrame(fitView);
 })();

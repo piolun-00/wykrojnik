@@ -4,19 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KHOREI — wykrojnik</title>
-<link rel="stylesheet" href="app/app.css?v=2026.11.12.1542">
+<link rel="stylesheet" href="app/app.css?v=2026.11.12.1611">
 </head>
 <body>
 <div class="app">
-  <div class="banner" id="banner" hidden>Jest nowa wersja. Zapisz plik i odśwież stronę skrótem <b>Cmd+Shift+R</b>. Niezapisany wykrojnik zniknie.<button class="btn" id="bUpdate" type="button">Odśwież teraz</button></div>
+  <div class="banner" id="banner" hidden>Jest nowa wersja. Odśwież stronę skrótem <b>Cmd+Shift+R</b>. Wykrojnik jest zapisany w przeglądarce i zostanie.<button class="btn" id="bUpdate" type="button">Odśwież teraz</button></div>
   <header class="top">
     <div class="top__brand">KHOREI <span>wykrojnik</span> <small id="ver"></small></div>
     <div class="top__status" id="status"></div>
+    <span class="saved" id="saved"></span>
     <div class="top__actions">
       <button class="btn" id="bUndo" title="Ctrl Z">Cofnij</button>
       <button class="btn" id="bNew">Nowe pudełko</button>
       <label class="btn is--primary" for="fileIn" tabindex="0">Wczytaj plik</label>
-      <input type="file" id="fileIn" accept=".svg,.dxf,.pdf,image/svg+xml,application/pdf" hidden>
+      <input type="file" id="fileIn" accept=".svg,.dxf,.pdf,.json,image/svg+xml,application/pdf,application/json" hidden>
     </div>
   </header>
 
@@ -110,6 +111,8 @@
           <button class="btn" id="exSvg" type="button">SVG</button>
         </div>
         <p class="note" id="saveNote"></p>
+        <button class="btn" id="exProj" type="button">Zapisz projekt do pliku</button>
+        <p class="note">Praca zapisuje się sama w tej przeglądarce. Plik projektu przenosi ją na inny komputer — wczytasz go przyciskiem „Wczytaj plik”.</p>
       </div>
     </div>
   </div></div>
@@ -121,6 +124,7 @@
         <button type="button" id="bDel" title="Delete">Usuń</button>
         <button type="button" id="bFlat">Zamień pudełko na linie</button>
         <button type="button" id="bCurve" hidden>Łuk / prosta</button>
+        <button type="button" id="bWall" hidden>Zamień na ściankę</button>
         <button type="button" id="bJoin">Połącz linie</button>
         <button type="button" id="bFit">Pokaż całość</button>
       </div>
@@ -131,11 +135,11 @@
     <div class="dock" role="toolbar" aria-label="Narzędzia"><div class="dock__tools" id="dockTools"></div><div class="dock__sides" id="sidesBox" hidden><button type="button" data-d="-1" aria-label="Mniej boków">−</button><span><b id="sidesN">3</b> boki</span><button type="button" data-d="1" aria-label="Więcej boków">+</button></div></div>
   </div>
 </div>
-<div class="menu" id="menu"><span class="menu__label">Dodaj przy tej krawędzi</span><button type="button" data-kind="wall">Ścianka</button><button type="button" data-kind="glue">Klejenie <small>skośne boki</small></button><button type="button" data-kind="tuck">Zakładka <small>zaokrąglona</small></button><button type="button" data-kind="dust">Klapka <small>boczna</small></button></div>
+<div class="menu" id="menu"><span class="menu__label">Dodaj przy tej krawędzi</span><button type="button" data-kind="wall">Ścianka</button><button type="button" data-kind="glue">Klejenie <small>skośne boki</small></button><button type="button" data-kind="tuck">Zakładka <small>zaokrąglona</small></button><button type="button" data-kind="dust">Klapka <small>boczna</small></button><button type="button" data-kind="tab">Wypustki <small>bez bigu</small></button></div>
 <div id="toast" role="status"></div>
 <div id="drop">Upuść plik SVG, DXF lub PDF</div>
 
-<script src="app/core.js?v=2026.11.12.1542"></script>
-<script src="app/ui.js?v=2026.11.12.1542"></script>
+<script src="app/core.js?v=2026.11.12.1611"></script>
+<script src="app/ui.js?v=2026.11.12.1611"></script>
 </body>
 </html>
