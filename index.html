@@ -44,6 +44,7 @@ button{cursor:pointer}
 .card__body{padding:12px 12px 14px;display:none;gap:12px;border-top:1px solid var(--line)}
 .card.is--open .card__body{display:grid}
 .f{display:grid;gap:5px;min-width:0}
+.f__hint{color:var(--muted);font-size:12px}
 .f__label{color:var(--muted);display:flex;justify-content:space-between;gap:6px;white-space:nowrap}
 .f input[type=number],.f select{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:2px;padding:7px 9px;font-variant-numeric:tabular-nums}
 .f input:focus,.f select:focus{outline:2px solid var(--fg);outline-offset:-1px}
@@ -153,6 +154,7 @@ button{cursor:pointer}
           <div class="f"><label class="f__label" for="mat">Rodzaj</label><select id="mat"></select></div>
           <div class="f"><label class="f__label" for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
         </div>
+        <div class="f"><label class="f__label" for="fold">Jak zaginasz</label><select id="fold"><option value="crease">Bigowanie</option><option value="vin">Rowek V od środka</option><option value="vout">Nacięcie od zewnątrz</option></select><span class="f__hint" id="foldNote"></span></div>
       </div>
     </div>
 
@@ -165,7 +167,7 @@ button{cursor:pointer}
           <div class="f"><label class="f__label" for="bG">Głębokość</label><input type="number" id="bG" step="0.5" min="1"></div>
         </div>
         <label class="check"><input type="checkbox" id="bLock"> Zachowaj proporcje (albo przytrzymaj Shift)</label>
-        <p class="note">Wymiar zewnętrzny w mm. Ścianki liczą się z niego same.</p>
+        <p class="note">Wymiar zewnętrzny złożonego pudełka w mm. Liczby na ściankach to odległości między bigami.</p>
         <div class="f"><span class="f__label">Zacznij od</span><div class="chips" id="tpl"><button type="button" data-tpl="tuck">Pudełko z zakładkami</button><button type="button" data-tpl="tray">Taca</button><button type="button" data-tpl="one">Jedna ścianka</button></div></div>
       </div>
     </div>
@@ -654,26 +656,32 @@ function scaleAxis(paths,ax,lo,k){
 }
 
 /* --- pudełko: ścianki połączone bigami, wymiary z danych pudełka --- */
-function exprVal(e,P){var v=(e.base==='num'?e.val:P[e.base]*(e.mul||1))+(e.kt||0)*P.t;return Math.max(1,v);}
+/* Wymiar ścianki na wykrojniku (od bigu do bigu) liczony z wymiaru ZEWNĘTRZNEGO pudełka.
+   Zgięcie ma zawias na głębokości P.h od zewnętrznej powierzchni: bigowanie = połowa grubości, rowek V od środka = 0, nacięcie od zewnątrz = cała grubość.
+   Każdy koniec ścianki, który jest zgięciem, zabiera P.h; nf = liczba takich końców (0–2). Własny wymiar jest brany dosłownie. */
+var FOLD={crease:0.5,vin:0,vout:1};
+function exprVal(e,P,nf){var v=e.base==='num'?e.val+(e.kt||0)*P.t:P[e.base]*(e.mul||1)-(nf||0)*(P.h||0)+(e.kt||0)*P.t;return Math.max(1,v);}
 function boxTemplate(name){
   var n=1,ps=[],W=function(par,edge,base,kt){var p={id:n++,kind:'wall',parent:par,edge:edge,ext:{base:base,kt:kt}};ps.push(p);return p.id;},
     F=function(par,edge,kind){var e=kind==='glue'?{base:'num',val:12,kt:0}:kind==='tuck'?{base:'num',val:15,kt:0}:{base:'G',mul:0.5,kt:0};ps.push({id:n++,kind:kind,parent:par,edge:edge,ext:e});};
   if(name==='tray'){
-    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'G',kt:-1}});
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:0},h:{base:'G',kt:0}});
     var t=W(1,'t','W',0),b=W(1,'b','W',0);W(1,'l','W',0);W(1,'r','W',0);
     F(t,'a','glue');F(t,'b','glue');F(b,'a','glue');F(b,'b','glue');
   }else if(name==='one'){
-    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'W',kt:-1}});
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:0},h:{base:'W',kt:0}});
   }else{
-    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'W',kt:-1}});
-    var s1=W(1,'r','G',-1),bk=W(s1,'o','S',-1),s2=W(bk,'o','G',-1);F(s2,'o','glue');
+    /* ścianka z klejeniem i wieczka z zakładką są krótsze o 1 × grubość: klapka klejowa i zakładka chowają się POD sąsiednią ściankę */
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:0},h:{base:'W',kt:0}});
+    var s1=W(1,'r','G',0),bk=W(s1,'o','S',0),s2=W(bk,'o','G',-1);F(s2,'o','glue');
     var lid=W(1,'t','G',-1);F(lid,'o','tuck');var bot=W(1,'b','G',-1);F(bot,'o','tuck');
     F(s1,'a','dust');F(s1,'b','dust');F(s2,'a','dust');F(s2,'b','dust');
   }
   return ps;
 }
 function buildBox(box){
-  var P=box.P,kids={},out={paths:[],polys:{},plus:[],labels:[],frames:{}},root=null;
+  var P=box.P,kids={},out={paths:[],polys:{},plus:[],labels:[],frames:{},dims:{}},root=null;
+  P.h=(FOLD[P.fold]!=null?FOLD[P.fold]:0.5)*P.t;
   box.panels.forEach(function(p){if(p.parent==null)root=p;else kids[p.parent+':'+p.edge]=p;});
   if(!root)return out;
   function pt(F,a,b){return {x:F.O.x+a*F.u.x+b*F.n.x,y:F.O.y+a*F.u.y+b*F.n.y};}
@@ -683,12 +691,16 @@ function buildBox(box){
     if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)]);var m=pt(F,F.len/2,0);out.plus.push({id:p.id,edge:key,x:m.x,y:m.y,nx:F.n.x,ny:F.n.y});return;}
     /* klapki odsuwają się od krawędzi o wielokrotność grubości materiału — inaczej przy grubym kartonie klinują się przy składaniu */
     var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
+    /* klapka leżąca pod inną warstwą (np. boczna pod wieczkiem) ma big cofnięty w głąb ścianki o grubość tej warstwy */
+    var sk=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.sink&&ch.sink.kt!=null?ch.sink.kt:(ch.kind==='dust'?1:0))*P.t),F.len*0.3);
+    if(sk>0.001){emit('cut',[pt(F,0,0),pt(F,0,-sk),pt(F,ins,-sk)]);emit('crease',[pt(F,ins,-sk),pt(F,F.len-ins,-sk)]);emit('cut',[pt(F,F.len-ins,-sk),pt(F,F.len,-sk),pt(F,F.len,0)]);
+      place(ch,{O:pt(F,0,-sk),u:F.u,n:F.n,len:F.len},ins);return;}
     if(ins>0.001){emit('cut',[pt(F,0,0),pt(F,ins,0)]);emit('crease',[pt(F,ins,0),pt(F,F.len-ins,0)]);emit('cut',[pt(F,F.len-ins,0),pt(F,F.len,0)]);}
     else emit('crease',[pt(F,0,0),pt(F,F.len,0)]);
     place(ch,F,ins);
   }
   function place(p,F,ins){
-    var ext=exprVal(p.ext,P),len=F.len,c,L0=ins||0,L1=len-(ins||0);
+    var ext=exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0);out.dims[p.id]={ext:ext};
     if(p.kind==='wall'){
       out.frames[p.id]={nx:F.n.x,ny:F.n.y,pos:F.O.x*Math.abs(F.n.x)+F.O.y*Math.abs(F.n.y)};
       out.polys[p.id]=[pt(F,0,0),pt(F,0,ext),pt(F,len,ext),pt(F,len,0)];
@@ -705,7 +717,7 @@ function buildBox(box){
       var pl=[pt(F,L0,0),pt(F,L0+c,ext),pt(F,L1-c,ext),pt(F,L1,0)];emit('cut',pl.map(function(q){return {x:q.x,y:q.y};}));out.polys[p.id]=pl;
     }
   }
-  var w=exprVal(root.w,P),h=exprVal(root.h,P);
+  var w=exprVal(root.w,P,(kids[root.id+':l']?1:0)+(kids[root.id+':r']?1:0)),h=exprVal(root.h,P,(kids[root.id+':t']?1:0)+(kids[root.id+':b']?1:0));out.dims[root.id]={w:w,h:h};
   out.polys[root.id]=[{x:0,y:0},{x:w,y:0},{x:w,y:h},{x:0,y:h}];out.labels.push({id:root.id,x:w/2,y:h/2,a:w,b:h});
   edge(root,'t',{O:{x:0,y:0},u:{x:1,y:0},n:{x:0,y:-1},len:w});
   edge(root,'b',{O:{x:0,y:h},u:{x:1,y:0},n:{x:0,y:1},len:w});
@@ -726,7 +738,7 @@ if(typeof module!=='undefined')module.exports={boxTemplate:boxTemplate,buildBox:
 (function(){
 var $=function(id){return document.getElementById(id);};
 var svg=$('cv'),world=$('world'),overlay=$('overlay');
-var S={free:[],bpaths:[],paths:[],box:null,ctx:'obj',boxSel:false,sel:new Set(),nsel:new Set(),edit:new Set(),selP:null,polys:{},plus:[],labels:[],frames:{},
+var S={free:[],bpaths:[],paths:[],box:null,ctx:'obj',boxSel:false,sel:new Set(),nsel:new Set(),edit:new Set(),selP:null,polys:{},plus:[],labels:[],frames:{},dims:{},
   tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko',meas:null,undo:[],nid:1,rot:'auto',corner:'tl',hot:null,sides:3};
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
@@ -752,19 +764,20 @@ function undo(){var u=S.undo.pop();if(!u){toast('Nie ma czego cofać.');return;}
 
 /* --- pudełko --- */
 function regen(){
-  if(!S.box){S.bpaths=[];S.polys={};S.plus=[];S.labels=[];S.frames={};compose();return;}
+  if(!S.box){S.dims={};S.bpaths=[];S.polys={};S.plus=[];S.labels=[];S.frames={};compose();return;}
   S.box.P.t=thk();var r=buildBox(S.box),o=S.box.off||(S.box.off={x:0,y:0});
   r.paths.forEach(function(p){movePath(p,o.x,o.y);p.id=S.nid++;});
   Object.keys(r.polys).forEach(function(k){r.polys[k].forEach(function(q){q.x+=o.x;q.y+=o.y;});});
   r.plus.forEach(function(q){q.x+=o.x;q.y+=o.y;});r.labels.forEach(function(q){q.x+=o.x;q.y+=o.y;});
   Object.keys(r.frames).forEach(function(k){var f=r.frames[k];f.pos+=o.x*Math.abs(f.nx)+o.y*Math.abs(f.ny);});
-  S.bpaths=r.paths;S.polys=r.polys;S.plus=r.plus;S.labels=r.labels;S.frames=r.frames;
+  S.dims=r.dims;S.bpaths=r.paths;S.polys=r.polys;S.plus=r.plus;S.labels=r.labels;S.frames=r.frames;
   S.name='pudełko '+S.box.P.S+'×'+S.box.P.W+'×'+S.box.P.G;compose();
 }
 function panel(id){if(!S.box)return null;for(var i=0;i<S.box.panels.length;i++)if(S.box.panels[i].id===id)return S.box.panels[i];return null;}
 function setVal(id,v){var e=$(id);if(e&&document.activeElement!==e)e.value=v;}
-function syncBox(){if(!S.box)return;setVal('bS',S.box.P.S);setVal('bW',S.box.P.W);setVal('bG',S.box.P.G);}
-function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk()},off=S.box?S.box.off:{x:0,y:0};S.box={P:P,panels:boxTemplate(tpl),off:off};S.selP=null;regen();syncBox();}
+function foldNote(){var f=S.box?S.box.P.fold||'crease':$('fold').value;$('foldNote').textContent={crease:'Karton zgina się w połowie grubości. Ścianka między dwoma zgięciami = wymiar zewnętrzny − 1 × grubość.',vin:'Zawias zostaje na zewnętrznej warstwie. Ścianka między zgięciami = wymiar zewnętrzny.',vout:'Zawias zostaje na wewnętrznej warstwie. Ścianka między dwoma zgięciami = wymiar zewnętrzny − 2 × grubość.'}[f];}
+function syncBox(){if(!S.box)return;$('fold').value=S.box.P.fold||'crease';foldNote();setVal('bS',S.box.P.S);setVal('bW',S.box.P.W);setVal('bG',S.box.P.G);}
+function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk(),fold:$('fold').value},off=S.box?S.box.off:{x:0,y:0};S.box={P:P,panels:boxTemplate(tpl),off:off};S.selP=null;regen();syncBox();}
 function exprOf(p,k){return k==='ext'?p.ext:p[k];}
 function jointBase(p){var par=panel(p.parent);if(par.parent==null)return (p.edge==='t'||p.edge==='b')?par.w.base:par.h.base;return p.edge==='o'?jointBase(par):par.ext.base;}
 function basesOf(p){return p.parent==null?[p.w.base,p.h.base]:[jointBase(p),p.ext.base];}
@@ -775,7 +788,7 @@ function defExt(kind,par,at){if(kind==='glue')return {base:'num',val:12,kt:0};if
       S.box.panels.forEach(function(o){var f=S.frames[o.id];if(!twin&&f&&o.kind==='wall'&&Math.abs(f.nx-q.nx)<1e-6&&Math.abs(f.ny-q.ny)<1e-6&&Math.abs(f.pos-pos)<0.01)twin=o;});
       if(twin)return JSON.parse(JSON.stringify(twin.ext));}}
   var have=par?basesOf(par):[],miss=['S','W','G'].filter(function(b){return have.indexOf(b)<0;});
-  return {base:miss.length===1?miss[0]:'G',kt:-1};}
+  return {base:miss.length===1?miss[0]:'G',kt:0};}
 function dimRow(p,k,label){var e=exprOf(p,k),v=e.base==='num'?e.val:S.box.P[e.base]*(e.mul||1);
   return '<div class="f"><span class="f__label">'+label+'<span class="pv" id="pv-'+k+'"></span></span><div class="grid2"><select data-k="'+k+'" id="pb-'+k+'" aria-label="Skąd wymiar">'+Object.keys(BASE).map(function(b){return '<option value="'+b+'"'+(b===e.base?' selected':'')+'>'+BASE[b]+'</option>';}).join('')+
     '</select><input type="number" step="0.5" min="1" data-k="'+k+'" id="pn-'+k+'" value="'+(Math.round(v*100)/100)+'" aria-label="Wymiar mm"></div><div class="chips" data-k="'+k+'">'+[-2,-1,0,1,2].map(function(n){return '<button type="button" data-kt="'+n+'" aria-pressed="'+((e.kt||0)===n)+'">'+(n>0?'+':'')+(n?n+' × grubość':'bez poprawki')+'</button>';}).join('')+'</div></div>';}
@@ -787,10 +800,14 @@ function renderPanelCard(){
   else{h+='<div class="f"><span class="f__label">Rodzaj</span><div class="chips" id="kinds">'+Object.keys(KIND).map(function(k){return '<button type="button" data-setkind="'+k+'" aria-pressed="'+(p.kind===k)+'">'+KIND[k]+'</button>';}).join('')+'</div></div>';
     h+=dimRow(p,'ext',p.kind==='wall'?'Wymiar ścianki':'Szerokość');
     if(p.kind!=='wall'){var gk=p.gap&&p.gap.kt!=null?p.gap.kt:1;h+='<div class="f"><span class="f__label">Odstęp od krawędzi<span class="pv">= '+n1(gk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2,3].map(function(n){return '<button type="button" data-gap="'+n+'" aria-pressed="'+(gk===n)+'">'+(n?n+' × grubość':'bez odstępu')+'</button>';}).join('')+'</div></div>';}
+    if(p.kind!=='wall'){var sk=p.sink&&p.sink.kt!=null?p.sink.kt:(p.kind==='dust'?1:0);h+='<div class="f"><span class="f__label">Cofnięcie bigu<span class="pv">= '+n1(sk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-sink="'+n+'" aria-pressed="'+(sk===n)+'">'+(n?n+' × grubość':'w linii ścianki')+'</button>';}).join('')+'</div><span class="f__hint">Dla klapki, która po złożeniu leży pod inną warstwą.</span></div>';}
     h+='<button class="btn is--danger" type="button" id="pDel">Usuń '+(p.kind==='wall'?'ściankę i wszystko za nią':'ten element')+'</button>';}
   box.innerHTML=h;$('subWall').textContent=p.parent==null?'pierwsza':KIND[p.kind].toLowerCase();updatePv();
 }
-function updatePv(){var p=S.selP!=null?panel(S.selP):null;if(!p)return;(p.parent==null?['w','h']:['ext']).forEach(function(k){var e=$('pv-'+k);if(e)e.textContent='= '+n1(exprVal(exprOf(p,k),S.box.P))+' mm';});}
+function dimOf(p,k){var d=S.dims[p.id]||{};return d[k]||0;}
+function updatePv(){var p=S.selP!=null?panel(S.selP):null;if(!p)return;(p.parent==null?['w','h']:['ext']).forEach(function(k){var el=$('pv-'+k);if(!el)return;var e=exprOf(p,k),v=dimOf(p,k),P=S.box.P,t='';
+  if(e.base!=='num'){var raw=P[e.base]*(e.mul||1),kt=(e.kt||0)*P.t,fd=raw+kt-v;t=n1(raw)+(fd>0.001?' − '+n1(fd)+' zgięcia':'')+(kt?(kt>0?' + ':' − ')+n1(Math.abs(kt))+' poprawka':'')+' ';}
+  el.textContent=t+'= '+n1(v)+' mm';});}
 function boxChanged(full){regen();refresh();if(full)renderPanelCard();else updatePv();}
 function startEdit(){if(!editing){editing=true;pushUndo();}}
 document.querySelector('.panel').addEventListener('focusout',function(){editing=false;if(S.hot){S.hot=null;render();}});
@@ -798,9 +815,10 @@ $('pcard').addEventListener('input',function(e){var t=e.target;if(t.tagName!=='I
   var ex=exprOf(p,t.dataset.k);ex.base='num';ex.val=v;ex.kt=0;delete ex.mul;$('pb-'+t.dataset.k).value='num';
   t.closest('.f').querySelectorAll('[data-kt]').forEach(function(c){c.setAttribute('aria-pressed',c.dataset.kt==='0');});boxChanged(false);});
 $('pcard').addEventListener('change',function(e){var t=e.target;if(t.tagName!=='SELECT')return;var p=panel(S.selP);if(!p)return;pushUndo();var ex=exprOf(p,t.dataset.k);
-  if(t.value==='num'){ex.val=Math.round(exprVal({base:ex.base,val:ex.val,mul:ex.mul,kt:0},S.box.P)*100)/100;}ex.base=t.value;delete ex.mul;boxChanged(true);});
+  if(t.value==='num'){ex.val=Math.round(dimOf(p,t.dataset.k)*100)/100;ex.kt=0;}ex.base=t.value;delete ex.mul;boxChanged(true);});
 $('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP):null;if(!p)return;var b=e.target.closest('button');if(!b)return;
-  if(b.dataset.gap!==undefined){pushUndo();p.gap={kt:+b.dataset.gap};boxChanged(true);}
+  if(b.dataset.sink!==undefined){pushUndo();p.sink={kt:+b.dataset.sink};boxChanged(true);}
+  else if(b.dataset.gap!==undefined){pushUndo();p.gap={kt:+b.dataset.gap};boxChanged(true);}
   else if(b.dataset.kt!==undefined){pushUndo();exprOf(p,b.parentNode.dataset.k).kt=+b.dataset.kt;boxChanged(true);}
   else if(b.dataset.setkind){var k=b.dataset.setkind;if(k===p.kind)return;pushUndo();if(k!=='wall')removeKids(p.id);p.kind=k;p.ext=defExt(k,panel(p.parent),null);boxChanged(true);}
   else if(b.id==='pDel')delPanel();});
@@ -974,6 +992,7 @@ $('scW').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat
 $('scH').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat($('scH').value);if(b&&v>=1)scaleTo(v/b.h);});
 $('mat').innerHTML=MATS.map(function(m,i){return '<option value="'+i+'">'+esc(m[0])+'</option>';}).join('');
 $('mat').value='1';$('thk').value=MATS[1][1];
+$('fold').addEventListener('change',function(){if(S.box){pushUndo();S.box.P.fold=$('fold').value;boxChanged(true);}foldNote();});
 $('mat').addEventListener('change',function(){$('thk').value=MATS[+$('mat').value][1];if(S.box){pushUndo();boxChanged(true);}else refresh();});
 $('thk').addEventListener('input',function(){if(S.box){startEdit();boxChanged(false);}else refresh();});
 $('thk').addEventListener('change',function(){MATS[+$('mat').value][1]=thk();try{localStorage.setItem('wykr-mats',JSON.stringify(MATS));}catch(e){}});
@@ -1186,7 +1205,7 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.9';$('ver').textContent='v'+VERSION;
+var VERSION='2026.11.12.10';$('ver').textContent='v'+VERSION;
 var latest='';
 function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
 function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
@@ -1195,7 +1214,7 @@ $('bUpdate').addEventListener('click',function(){location.replace(location.pathn
 setInterval(checkVersion,60000);document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion();});checkVersion();
 
 /* --- start: przykładowe pudełko --- */
-newBox('tuck');
+foldNote();newBox('tuck');
 setTool('select');
 requestAnimationFrame(fitView);
 })();
