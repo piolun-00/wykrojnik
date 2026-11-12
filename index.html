@@ -8,7 +8,7 @@
 /* Wygląd jak edytor brandmanuala: monochromatyczny, roboczy. Dwie kolumny: karty ustawień · podgląd. */
 :root{
   --bg:#f4f4f2; --panel:#ffffff; --fg:#111111; --muted:#77776f; --line:#e2e2dd; --soft:#f0f0ec; --on:#111111; --on-fg:#ffffff; --danger:#c62d1f;
-  --cut:#d92b1c; --crease:#1f5fd0; --perf:#1e8a3c; --kiss:#9b2fb5; --ignore:#b5b5ad;
+  --cut:#d92b1c; --crease:#1f5fd0; --vcut:#0e8f8f; --perf:#1e8a3c; --kiss:#9b2fb5; --ignore:#b5b5ad;
   --ui:"ABC Areal Variable",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
   color-scheme:light;
 }
@@ -78,7 +78,7 @@ button{cursor:pointer}
 #cv.t-node,#cv.t-measure{cursor:crosshair}
 .p{fill:none;stroke-width:1.4;vector-effect:non-scaling-stroke;pointer-events:none;stroke-linejoin:round}
 .t-cut{stroke:var(--cut)} .t-crease{stroke:var(--crease);stroke-dasharray:7 4} .t-perf{stroke:var(--perf);stroke-dasharray:2 3}
-.t-kiss{stroke:var(--kiss)} .t-ignore{stroke:var(--ignore);stroke-width:1;stroke-dasharray:1 3}
+.t-kiss{stroke:var(--kiss);stroke-dasharray:10 3} .t-vcut{stroke:var(--vcut);stroke-dasharray:7 4} .t-ignore{stroke:var(--ignore);stroke-width:1;stroke-dasharray:1 3}
 .hit{fill:none;stroke:transparent;stroke-width:9;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer;stroke-linecap:round}
 .hit.on{stroke:var(--fg);stroke-opacity:.16}
 .sheet{fill:#fff;stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
@@ -154,7 +154,7 @@ button{cursor:pointer}
           <div class="f"><label class="f__label" for="mat">Rodzaj</label><select id="mat"></select></div>
           <div class="f"><label class="f__label" for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
         </div>
-        <div class="f"><label class="f__label" for="fold">Jak zaginasz</label><select id="fold"><option value="crease">Bigowanie</option><option value="vin">Rowek V od środka</option><option value="vout">Nacięcie od zewnątrz</option></select><span class="f__hint" id="foldNote"></span></div>
+        <div class="f"><label class="f__label" for="fold">Czym robisz zgięcia</label><select id="fold"><option value="crease">Kółko bigujące</option><option value="vin">Rowek V od środka</option><option value="vout">Nacięcie nożem od zewnątrz</option></select><span class="f__hint" id="foldNote"></span></div>
       </div>
     </div>
 
@@ -264,11 +264,12 @@ button{cursor:pointer}
 var TYPES={
   cut:{label:'Cięcie',layer:'CUT',aci:1,rgb:[255,0,0]},
   crease:{label:'Bigowanie',layer:'CREASE',aci:5,rgb:[0,0,255]},
+  vcut:{label:'Rowek V',layer:'VCUT',aci:4,rgb:[0,160,160]},
   perf:{label:'Perforacja',layer:'PERF',aci:3,rgb:[0,160,0]},
   kiss:{label:'Nacinanie',layer:'KISSCUT',aci:6,rgb:[255,0,255]},
   ignore:{label:'Pomiń',layer:'',aci:8,rgb:[150,150,150]}
 };
-var ORDER=['crease','perf','kiss','cut'];
+var ORDER=['crease','vcut','perf','kiss','cut'];
 function mmul(m,n){return [m[0]*n[0]+m[2]*n[1], m[1]*n[0]+m[3]*n[1], m[0]*n[2]+m[2]*n[3], m[1]*n[2]+m[3]*n[3], m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];}
 function hasC(p){return p.c1x!==undefined;}
 function dropC(p){delete p.c1x;delete p.c1y;delete p.c2x;delete p.c2y;}
@@ -569,7 +570,7 @@ function markList(c){if(!(c.mk>0))return [];var o=Math.max(c.mk,c.m/2);return [[
 /* --- zapis: DXF, PDF, SVG, ZIP --- */
 function fmt(n){return (Math.round(n*1000)/1000).toString();}
 function writeDXF(items,H,marks){
-  var o=['0','SECTION','2','HEADER','9','$ACADVER','1','AC1009','0','ENDSEC','0','SECTION','2','TABLES','0','TABLE','2','LAYER','70','5'];
+  var o=['0','SECTION','2','HEADER','9','$ACADVER','1','AC1009','0','ENDSEC','0','SECTION','2','TABLES','0','TABLE','2','LAYER','70','6'];
   ORDER.concat(['reg']).forEach(function(t){var T=TYPES[t]||{layer:'REG',aci:7};o.push('0','LAYER','2',T.layer,'70','0','62',String(T.aci),'6','CONTINUOUS');});
   o.push('0','ENDTAB','0','ENDSEC','0','SECTION','2','ENTITIES');
   items.forEach(function(p){var ly=TYPES[p.type].layer,f=flattenPath(p,0.02);
@@ -685,7 +686,9 @@ function buildBox(box){
   box.panels.forEach(function(p){if(p.parent==null)root=p;else kids[p.parent+':'+p.edge]=p;});
   if(!root)return out;
   function pt(F,a,b){return {x:F.O.x+a*F.u.x+b*F.n.x,y:F.O.y+a*F.u.y+b*F.n.y};}
-  function emit(type,pts){out.paths.push({type:type,src:type==='cut'?'#ff0000':'#0000ff',closed:false,pts:pts});}
+  /* linia zgięcia dostaje rodzaj narzędzia, którym będzie robiona: kółko bigujące, rowek V albo nacięcie */
+  var foldType={crease:'crease',vin:'vcut',vout:'kiss'}[P.fold]||'crease';
+  function emit(type,pts){if(type==='crease')type=foldType;out.paths.push({type:type,src:type==='cut'?'#ff0000':'#0000ff',closed:false,pts:pts});}
   function edge(p,key,F){
     var ch=kids[p.id+':'+key];
     if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)]);var m=pt(F,F.len/2,0);out.plus.push({id:p.id,edge:key,x:m.x,y:m.y,nx:F.n.x,ny:F.n.y});return;}
@@ -742,7 +745,7 @@ var S={free:[],bpaths:[],paths:[],box:null,ctx:'obj',boxSel:false,sel:new Set(),
   tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko',meas:null,undo:[],nid:1,rot:'auto',corner:'tl',hot:null,sides:3};
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
-var LBL={cut:'Cięcie',crease:'Bigowanie',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
+var LBL={cut:'Cięcie',crease:'Bigowanie',vcut:'Rowek V',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
 var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka'},BASE={S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
 var DRAW={rect:1,ellipse:1,line:1,poly:1};
 var drag=null,space=false,raf=0,editing=false,shift=false;
@@ -775,7 +778,7 @@ function regen(){
 }
 function panel(id){if(!S.box)return null;for(var i=0;i<S.box.panels.length;i++)if(S.box.panels[i].id===id)return S.box.panels[i];return null;}
 function setVal(id,v){var e=$(id);if(e&&document.activeElement!==e)e.value=v;}
-function foldNote(){var f=S.box?S.box.P.fold||'crease':$('fold').value;$('foldNote').textContent={crease:'Karton zgina się w połowie grubości. Ścianka między dwoma zgięciami = wymiar zewnętrzny − 1 × grubość.',vin:'Zawias zostaje na zewnętrznej warstwie. Ścianka między zgięciami = wymiar zewnętrzny.',vout:'Zawias zostaje na wewnętrznej warstwie. Ścianka między dwoma zgięciami = wymiar zewnętrzny − 2 × grubość.'}[f];}
+function foldNote(){var f=S.box?S.box.P.fold||'crease':$('fold').value;$('foldNote').textContent={crease:'Karton zgina się w połowie grubości: ścianka między zgięciami = wymiar zewnętrzny − 1 × grubość. Linie idą na warstwę CREASE.',vin:'Zawias zostaje na zewnętrznej warstwie: ścianka między zgięciami = wymiar zewnętrzny. Linie idą na warstwę VCUT. Arkusz tniesz stroną wewnętrzną do góry.',vout:'Zawias zostaje na wewnętrznej warstwie: ścianka = wymiar zewnętrzny − 2 × grubość. Linie idą na warstwę KISSCUT.'}[f];}
 function syncBox(){if(!S.box)return;$('fold').value=S.box.P.fold||'crease';foldNote();setVal('bS',S.box.P.S);setVal('bW',S.box.P.W);setVal('bG',S.box.P.G);}
 function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk(),fold:$('fold').value},off=S.box?S.box.off:{x:0,y:0};S.box={P:P,panels:boxTemplate(tpl),off:off};S.selP=null;regen();syncBox();}
 function exprOf(p,k){return k==='ext'?p.ext:p[k];}
@@ -931,9 +934,10 @@ function show(sel,on){document.querySelectorAll(sel).forEach(function(e){e.hidde
 function refresh(forceDims){
   render();
   var act=active(),b=bboxOf(act),len={cut:0,crease:0};
-  act.forEach(function(p){if(len[p.type]!==undefined)len[p.type]+=pathLength(p);});
+  var foldT={crease:1,vcut:1},boxFold=S.box?{crease:'crease',vin:'vcut',vout:'kiss'}[S.box.P.fold||'crease']:'';
+  act.forEach(function(p){var l=pathLength(p);if(p.type==='cut')len.cut+=l;else if(foldT[p.type]||(p.type===boxFold&&S.bpaths.indexOf(p)>=0))len.crease+=l;});
   var c=cfg(),L=layoutSheet(S.paths,c),dimT=b?n1(b.w)+' × '+n1(b.h)+' mm':'–',impT=L?L.count+' szt.':'–';
-  $('status').innerHTML=b?'<b>'+esc(S.name)+'</b> · '+dimT+' · cięcie '+(len.cut/1000).toFixed(2).replace('.',',')+' m · bigowanie '+(len.crease/1000).toFixed(2).replace('.',',')+' m · arkusz '+impT:'Pusty dokument. Narysuj coś, wczytaj plik albo zacznij nowe pudełko.';
+  $('status').innerHTML=b?'<b>'+esc(S.name)+'</b> · '+dimT+' · cięcie '+(len.cut/1000).toFixed(2).replace('.',',')+' m · zgięcia '+(len.crease/1000).toFixed(2).replace('.',',')+' m · arkusz '+impT:'Pusty dokument. Narysuj coś, wczytaj plik albo zacznij nowe pudełko.';
   $('subPlik').textContent=S.name;$('subMat').textContent=thk().toString().replace('.',',')+' mm';if(S.box)$('subBox').textContent=S.box.P.S+' × '+S.box.P.W+' × '+S.box.P.G;
   $('subWym').textContent=dimT;$('subArk').textContent=L?impT+' · '+Math.round(L.util*100)+'%':'–';
   $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.uc+' × '+L.ur+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':b?'Nie mieści się na arkuszu':'–';
@@ -1205,7 +1209,7 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.11';$('ver').textContent='v'+VERSION;
+var VERSION='2026.11.12.12';$('ver').textContent='v'+VERSION;
 var latest='';
 function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
 function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
