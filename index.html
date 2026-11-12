@@ -64,6 +64,10 @@ button{cursor:pointer}
 .chips button[aria-pressed=true]{background:var(--on);color:var(--on-fg)}
 .chips button svg{display:block}
 .chips button i{display:inline-block;width:8px;height:8px;margin-right:6px}
+.corner{display:grid;grid-template-columns:28px 28px;gap:3px;width:max-content;padding:3px;border:1px solid var(--line);border-radius:2px;background:var(--panel)}
+.corner button{width:28px;height:20px;border:0;border-radius:2px;background:var(--soft)}
+.corner button:hover{background:var(--line)}
+.corner button[aria-pressed=true]{background:var(--on)}
 .check{display:flex;align-items:center;gap:8px}
 
 .preview{grid-area:preview;display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -199,6 +203,7 @@ button{cursor:pointer}
           <div class="f"><label class="f__label" for="iMax">Ile sztuk</label><input type="number" id="iMax" min="1" placeholder="max"></div>
         </div>
         <div class="f"><span class="f__label">Obrót</span><div class="chips" id="rot"><button type="button" data-rot="auto" aria-pressed="true">Auto</button><button type="button" data-rot="0" aria-pressed="false">0°</button><button type="button" data-rot="90" aria-pressed="false">90°</button></div></div>
+        <div class="f"><span class="f__label">Układaj od rogu</span><div class="corner" id="corner"><button type="button" data-corner="tl" aria-pressed="true" aria-label="Lewy górny"></button><button type="button" data-corner="tr" aria-pressed="false" aria-label="Prawy górny"></button><button type="button" data-corner="bl" aria-pressed="false" aria-label="Lewy dolny"></button><button type="button" data-corner="br" aria-pressed="false" aria-label="Prawy dolny"></button></div></div>
         <label class="check"><input type="checkbox" id="iMk" checked> Znaczniki pasowania w rogach</label>
       </div>
     </div>
@@ -530,8 +535,9 @@ function layoutSheet(paths,c){
   var n=Lr.n;if(c.max>0)n=Math.min(n,c.max);
   var uc=Math.min(n,Lr.cols),ur=Lr.cols?Math.ceil(n/Lr.cols):0;
   var bw=uc*Lr.w+Math.max(0,uc-1)*c.gap,bh=ur*Lr.h+Math.max(0,ur-1)*c.gap;
-  var cells=[];for(var i=0;i<n;i++)cells.push({x:(c.W-bw)/2+(i%Lr.cols)*(Lr.w+c.gap),y:(c.H-bh)/2+Math.floor(i/Lr.cols)*(Lr.h+c.gap)});
-  return {b:b,rot:rot,w:Lr.w,h:Lr.h,cols:Lr.cols,rows:Lr.rows,count:n,cells:cells,util:n*b.w*b.h/(c.W*c.H)};
+  var cells=[],co=c.corner||'tl',rt=co.charAt(1)==='r',bt=co.charAt(0)==='b';
+  for(var i=0;i<n;i++){var cx=(i%Lr.cols)*(Lr.w+c.gap),cy=Math.floor(i/Lr.cols)*(Lr.h+c.gap);cells.push({x:rt?c.W-c.m-Lr.w-cx:c.m+cx,y:bt?c.H-c.m-Lr.h-cy:c.m+cy});}
+  return {b:b,rot:rot,w:Lr.w,h:Lr.h,cols:Lr.cols,rows:Lr.rows,uc:uc,ur:ur,count:n,cells:cells,util:n*b.w*b.h/(c.W*c.H)};
 }
 function orderPaths(paths){
   return paths.filter(function(p){return p.type!=='ignore';}).map(function(p){var b=bboxOf([p]);return {p:p,a:b.w*b.h,o:ORDER.indexOf(p.type)};})
@@ -700,7 +706,7 @@ if(typeof module!=='undefined')module.exports={boxTemplate:boxTemplate,buildBox:
 (function(){
 var $=function(id){return document.getElementById(id);};
 var svg=$('cv'),world=$('world'),overlay=$('overlay');
-var S={paths:[],sel:new Set(),nsel:new Set(),mode:'box',box:null,selP:null,polys:{},plus:[],labels:[],tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko',meas:null,undo:[],nid:1,rot:'auto',hot:null};
+var S={paths:[],sel:new Set(),nsel:new Set(),mode:'box',box:null,selP:null,polys:{},plus:[],labels:[],tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko',meas:null,undo:[],nid:1,rot:'auto',corner:'tl',hot:null};
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
 var LBL={cut:'Cięcie',crease:'Bigowanie',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
@@ -709,7 +715,7 @@ var drag=null,space=false,raf=0,editing=false;
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function n1(v){return v.toFixed(1).replace('.',',');}
 function toast(t){var e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){e.style.display='none';},3800);}
-function cfg(){var n=function(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d;};return {W:Math.max(10,n('iW',1010)),H:Math.max(10,n('iH',720)),m:Math.max(0,n('iM',12)),gap:Math.max(0,n('iG',3)),max:Math.max(0,Math.floor(n('iMax',0))),rot:S.rot,mk:$('iMk').checked?5:0};}
+function cfg(){var n=function(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d;};return {W:Math.max(10,n('iW',1010)),H:Math.max(10,n('iH',720)),m:Math.max(0,n('iM',12)),gap:Math.max(0,n('iG',3)),max:Math.max(0,Math.floor(n('iMax',0))),rot:S.rot,corner:S.corner,mk:$('iMk').checked?5:0};}
 function thk(){var v=parseFloat($('thk').value);return isFinite(v)?v:0;}
 function byId(id){for(var i=0;i<S.paths.length;i++)if(S.paths[i].id===id)return S.paths[i];return null;}
 function pushUndo(){S.undo.push(JSON.stringify({mode:S.mode,paths:S.mode==='file'?S.paths:null,box:S.box,selP:S.selP,name:S.name}));if(S.undo.length>80)S.undo.shift();}
@@ -837,7 +843,7 @@ function refresh(forceDims){
   var c=cfg(),L=layoutSheet(S.paths,c),dimT=b?n1(b.w)+' × '+n1(b.h)+' mm':'–',impT=L?L.count+' szt.':'–';
   $('status').innerHTML=b?'<b>'+esc(S.name)+'</b> · '+dimT+' · cięcie '+(len.cut/1000).toFixed(2).replace('.',',')+' m · bigowanie '+(len.crease/1000).toFixed(2).replace('.',',')+' m · arkusz '+impT:'Wczytaj plik, żeby zacząć.';
   $('subPlik').textContent=S.name;$('subMat').textContent=thk().toString().replace('.',',')+' mm';if(S.box)$('subBox').textContent=S.box.P.S+' × '+S.box.P.W+' × '+S.box.P.G;$('subWym').textContent=dimT;$('subArk').textContent=L?impT+' · '+Math.round(L.util*100)+'%':'–';
-  $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.cols+' × '+Math.ceil(L.count/L.cols)+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':'Nie mieści się na arkuszu';
+  $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.uc+' × '+L.ur+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':'Nie mieści się na arkuszu';
   if(b){setVal('scW',(Math.round(b.w*10)/10).toString());setVal('scH',(Math.round(b.h*10)/10).toString());}
   renderDims(forceDims);
   var map={};groupList=[];
@@ -900,6 +906,7 @@ $('thk').addEventListener('change',function(){MATS[+$('mat').value][1]=thk();try
 
 /* --- impozycja na żywo --- */
 ['iW','iH','iM','iG','iMax','iMk'].forEach(function(id){$(id).addEventListener('input',function(){refresh();if(S.view==='sheet'&&(id==='iW'||id==='iH'))fitView();});});
+$('corner').addEventListener('click',function(e){var r=e.target.dataset.corner;if(!r)return;S.corner=r;$('corner').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.corner===r?'true':'false');});refresh();});
 $('rot').addEventListener('click',function(e){var r=e.target.dataset.rot;if(!r)return;S.rot=r;$('rot').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.rot===r?'true':'false');});refresh();});
 
 /* --- edycja na podglądzie --- */
@@ -1082,8 +1089,8 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.3';$('ver').textContent='v'+VERSION;
-function checkVersion(){if(location.protocol==='file:')return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j&&j.version&&j.version!==VERSION){$('bUpdate').hidden=false;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
+var VERSION='2026.11.12.4';$('ver').textContent='v'+VERSION;
+function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j&&j.version&&j.version!==VERSION){$('bUpdate').hidden=false;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
 $('bUpdate').addEventListener('click',function(){location.reload();});
 setInterval(checkVersion,60000);document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion();});checkVersion();
 
