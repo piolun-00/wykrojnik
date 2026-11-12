@@ -1098,9 +1098,12 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.5';$('ver').textContent='v'+VERSION;
-function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j&&j.version&&j.version!==VERSION){$('bUpdate').hidden=false;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
-$('bUpdate').addEventListener('click',function(){location.reload();});
+var VERSION='2026.11.12.6';$('ver').textContent='v'+VERSION;
+var latest='';
+function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
+function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
+/* adres z numerem wersji omija pamięć podręczną — zwykłe odświeżenie potrafi oddać starą stronę */
+$('bUpdate').addEventListener('click',function(){location.replace(location.pathname+'?v='+encodeURIComponent(latest||Date.now()));});
 setInterval(checkVersion,60000);document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion();});checkVersion();
 
 /* --- start: przykładowy wykrojnik --- */
