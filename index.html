@@ -21,6 +21,7 @@ button{cursor:pointer}
 .top{grid-area:top;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0}
 .top__brand{font-weight:700;letter-spacing:.02em;white-space:nowrap}
 .top__brand span{font-weight:500;color:var(--muted)}
+.top__brand small{font-weight:500;color:var(--muted);font-size:11px;margin-left:4px}
 .top__status{color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
 .top__status b{color:var(--fg);font-weight:500}
 .top__actions{display:flex;gap:8px}
@@ -86,6 +87,21 @@ button{cursor:pointer}
 .tick{stroke:var(--muted);stroke-width:1}
 .meas{stroke:var(--fg);stroke-width:1;stroke-dasharray:3 3}
 .measT{font:600 12px var(--ui);fill:var(--fg);paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+.app.m-box [data-mode=file],.app.m-file [data-mode=box]{display:none!important}
+.psel{fill:var(--fg);fill-opacity:.07;stroke:none}
+.lab{font:500 11px var(--ui);fill:var(--muted);font-variant-numeric:tabular-nums;pointer-events:none}
+.lab.on{fill:var(--fg);font-weight:700}
+.plus{cursor:pointer}
+.plus circle{fill:var(--panel);stroke:var(--fg);stroke-width:1}
+.plus path{stroke:var(--fg);stroke-width:1.4;fill:none}
+.plus:hover circle{fill:var(--fg)} .plus:hover path{stroke:var(--panel)}
+.menu{position:fixed;z-index:10;min-width:200px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.08);padding:8px;display:none;gap:2px}
+.menu__label{color:var(--muted);padding:4px 8px}
+.menu button{text-align:left;border:0;background:none;padding:7px 8px;border-radius:2px;display:flex;justify-content:space-between;gap:12px}
+.menu button:hover{background:var(--soft)}
+.menu small{color:var(--muted)}
+.pv{color:var(--fg);font-variant-numeric:tabular-nums}
+.btn.is--danger{color:var(--danger)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--on);color:var(--on-fg);padding:8px 14px;border-radius:2px;max-width:min(90vw,520px);display:none;z-index:5}
 #drop{position:fixed;inset:0;outline:2px dashed var(--fg);outline-offset:-12px;background:rgba(244,244,242,.85);display:none;align-items:center;justify-content:center;font-size:20px;z-index:4;pointer-events:none}
 @media (max-width:1000px){
@@ -97,19 +113,49 @@ button{cursor:pointer}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app m-box">
   <header class="top">
-    <div class="top__brand">KHOREI <span>wykrojnik</span></div>
+    <div class="top__brand">KHOREI <span>wykrojnik</span> <small id="ver"></small></div>
     <div class="top__status" id="status"></div>
     <div class="top__actions">
+      <button class="btn is--primary" id="bUpdate" hidden>Nowa wersja – odśwież</button>
       <button class="btn" id="bUndo" title="Ctrl Z">Cofnij</button>
+      <button class="btn" id="bNew">Nowe pudełko</button>
       <label class="btn is--primary" for="fileIn" tabindex="0">Wczytaj plik</label>
       <input type="file" id="fileIn" accept=".svg,.dxf,.pdf,image/svg+xml,application/pdf" hidden>
     </div>
   </header>
 
   <div class="panel"><div class="panel__inner">
-    <div class="card is--open" data-card="plik">
+    <div class="card is--open" data-card="mat">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Materiał</span><span class="card__sub" id="subMat"></span></button>
+      <div class="card__body">
+        <div class="grid2">
+          <div class="f"><label class="f__label" for="mat">Rodzaj</label><select id="mat"></select></div>
+          <div class="f"><label class="f__label" for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card is--open" data-card="box" data-mode="box">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Pudełko</span><span class="card__sub" id="subBox"></span></button>
+      <div class="card__body">
+        <div class="grid3">
+          <div class="f"><label class="f__label" for="bS">Szerokość</label><input type="number" id="bS" step="0.5" min="1"></div>
+          <div class="f"><label class="f__label" for="bW">Wysokość</label><input type="number" id="bW" step="0.5" min="1"></div>
+          <div class="f"><label class="f__label" for="bG">Głębokość</label><input type="number" id="bG" step="0.5" min="1"></div>
+        </div>
+        <p class="note">Wymiar zewnętrzny w mm. Ścianki liczą się z niego same.</p>
+        <div class="f"><span class="f__label">Zacznij od</span><div class="chips" id="tpl"><button type="button" data-tpl="tuck">Pudełko z zakładkami</button><button type="button" data-tpl="tray">Taca</button><button type="button" data-tpl="one">Jedna ścianka</button></div></div>
+      </div>
+    </div>
+
+    <div class="card is--open" data-card="wall" data-mode="box">
+      <button class="card__title" type="button"><span class="card__chev">▾</span><span>Ścianka</span><span class="card__sub" id="subWall"></span></button>
+      <div class="card__body" id="pcard"></div>
+    </div>
+
+    <div class="card is--open" data-card="plik" data-mode="file">
       <button class="card__title" type="button"><span class="card__chev">▾</span><span>Plik</span><span class="card__sub" id="subPlik"></span></button>
       <div class="card__body">
         <label class="btn is--add" for="fileIn">Wczytaj albo upuść plik SVG, DXF, PDF</label>
@@ -121,7 +167,7 @@ button{cursor:pointer}
       </div>
     </div>
 
-    <div class="card is--open" data-card="linie">
+    <div class="card is--open" data-card="linie" data-mode="file">
       <button class="card__title" type="button"><span class="card__chev">▾</span><span>Linie</span><span class="card__sub" id="subLinie"></span></button>
       <div class="card__body">
         <div id="groups" style="display:grid;gap:6px"></div>
@@ -129,18 +175,12 @@ button{cursor:pointer}
       </div>
     </div>
 
-    <div class="card is--open" data-card="wymiary">
+    <div class="card is--open" data-card="wymiary" data-mode="file">
       <button class="card__title" type="button"><span class="card__chev">▾</span><span>Wymiary</span><span class="card__sub" id="subWym"></span></button>
       <div class="card__body">
         <div class="f"><span class="f__label">W poziomie mm</span><div class="grid3" id="dim-x"></div></div>
         <div class="f"><span class="f__label">W pionie mm</span><div class="grid3" id="dim-y"></div></div>
-        <div class="sub">
-          <div class="grid2">
-            <div class="f"><label class="f__label" for="mat">Materiał</label><select id="mat"></select></div>
-            <div class="f"><label class="f__label" for="thk">Grubość mm</label><input type="number" id="thk" step="0.05" min="0"></div>
-          </div>
-          <p class="note">„+ grubość” przy polu powiększa ten odcinek o grubość materiału.</p>
-        </div>
+        <p class="note">„+ grubość” przy polu powiększa odcinek o grubość materiału.</p>
         <p class="note">Odcinki liczę między liniami bigowania. Wpisz wymiar, reszta przesuwa się sama.</p>
       </div>
     </div>
@@ -179,21 +219,23 @@ button{cursor:pointer}
   <div class="preview">
     <div class="preview__bar">
       <div class="chips" id="tools">
-        <button type="button" data-tool="select" aria-pressed="true" title="V">Zaznacz</button>
-        <button type="button" data-tool="node" aria-pressed="false" title="A">Punkty</button>
+        <button type="button" data-tool="select" aria-pressed="true" title="V"><span data-mode="file">Zaznacz</span><span data-mode="box">Ścianki</span></button>
+        <button type="button" data-tool="node" aria-pressed="false" title="A" data-mode="file">Punkty</button>
         <button type="button" data-tool="measure" aria-pressed="false" title="M">Miarka</button>
       </div>
       <div class="chips">
         <button type="button" id="bDel" title="Delete">Usuń</button>
-        <button type="button" id="bJoin">Połącz linie</button>
+        <button type="button" id="bFlat" data-mode="box">Zamień na zwykłe linie</button>
+        <button type="button" id="bJoin" data-mode="file">Połącz linie</button>
         <button type="button" id="bFit">Pokaż całość</button>
       </div>
-      <div class="chips" id="align" aria-label="Wyrównaj zaznaczone"></div>
+      <div class="chips" id="align" aria-label="Wyrównaj zaznaczone" data-mode="file"></div>
       <span class="preview__info" id="info"></span>
     </div>
     <svg id="cv" xmlns="http://www.w3.org/2000/svg"><g id="world"></g><g id="overlay"></g></svg>
   </div>
 </div>
+<div class="menu" id="menu"><span class="menu__label">Dodaj przy tej krawędzi</span><button type="button" data-kind="wall">Ścianka</button><button type="button" data-kind="glue">Klejenie <small>skośne boki</small></button><button type="button" data-kind="tuck">Zakładka <small>zaokrąglona</small></button><button type="button" data-kind="dust">Klapka <small>boczna</small></button></div>
 <div id="toast" role="status"></div>
 <div id="drop">Upuść plik SVG, DXF lub PDF</div>
 
@@ -591,14 +633,74 @@ function stretchAxis(paths,ax,a,b,d){
 function scaleAxis(paths,ax,lo,k){
   return paths.map(function(p){return mapPath(p,function(x,y){return ax==='x'?[lo+(x-lo)*k,y]:[x,lo+(y-lo)*k];});});
 }
-if(typeof module!=='undefined')module.exports={axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
+
+/* --- pudełko: ścianki połączone bigami, wymiary z danych pudełka --- */
+function exprVal(e,P){var v=(e.base==='num'?e.val:P[e.base]*(e.mul||1))+(e.kt||0)*P.t;return Math.max(1,v);}
+function boxTemplate(name){
+  var n=1,ps=[],W=function(par,edge,base,kt){var p={id:n++,kind:'wall',parent:par,edge:edge,ext:{base:base,kt:kt}};ps.push(p);return p.id;},
+    F=function(par,edge,kind){var e=kind==='glue'?{base:'num',val:12,kt:0}:kind==='tuck'?{base:'num',val:15,kt:0}:{base:'G',mul:0.5,kt:0};ps.push({id:n++,kind:kind,parent:par,edge:edge,ext:e});};
+  if(name==='tray'){
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'G',kt:-1}});
+    var t=W(1,'t','W',0),b=W(1,'b','W',0);W(1,'l','W',0);W(1,'r','W',0);
+    F(t,'a','glue');F(t,'b','glue');F(b,'a','glue');F(b,'b','glue');
+  }else if(name==='one'){
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'W',kt:-1}});
+  }else{
+    ps.push({id:n++,kind:'wall',parent:null,w:{base:'S',kt:-1},h:{base:'W',kt:-1}});
+    var s1=W(1,'r','G',-1),bk=W(s1,'o','S',-1),s2=W(bk,'o','G',-1);F(s2,'o','glue');
+    var lid=W(1,'t','G',-1);F(lid,'o','tuck');var bot=W(1,'b','G',-1);F(bot,'o','tuck');
+    F(s1,'a','dust');F(s1,'b','dust');F(s2,'a','dust');F(s2,'b','dust');
+  }
+  return ps;
+}
+function buildBox(box){
+  var P=box.P,kids={},out={paths:[],polys:{},plus:[],labels:[]},root=null;
+  box.panels.forEach(function(p){if(p.parent==null)root=p;else kids[p.parent+':'+p.edge]=p;});
+  if(!root)return out;
+  function pt(F,a,b){return {x:F.O.x+a*F.u.x+b*F.n.x,y:F.O.y+a*F.u.y+b*F.n.y};}
+  function emit(type,pts){out.paths.push({type:type,src:type==='cut'?'#ff0000':'#0000ff',closed:false,pts:pts});}
+  function edge(p,key,F){
+    var ch=kids[p.id+':'+key];
+    if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)]);var m=pt(F,F.len/2,0);out.plus.push({id:p.id,edge:key,x:m.x,y:m.y,nx:F.n.x,ny:F.n.y});return;}
+    emit('crease',[pt(F,0,0),pt(F,F.len,0)]);place(ch,F);
+  }
+  function place(p,F){
+    var ext=exprVal(p.ext,P),len=F.len,c;
+    if(p.kind==='wall'){
+      out.polys[p.id]=[pt(F,0,0),pt(F,0,ext),pt(F,len,ext),pt(F,len,0)];
+      var ce=pt(F,len/2,ext/2);out.labels.push({id:p.id,x:ce.x,y:ce.y,a:len,b:ext});
+      edge(p,'a',{O:pt(F,0,0),u:F.n,n:{x:-F.u.x,y:-F.u.y},len:ext});
+      edge(p,'o',{O:pt(F,0,ext),u:F.u,n:F.n,len:len});
+      edge(p,'b',{O:pt(F,len,0),u:F.n,n:F.u,len:ext});
+    }else if(p.kind==='tuck'){
+      var r=Math.min(ext*0.6,len*0.25),k=0.5523*r,q=function(a,b){return pt(F,a,b);},A=q(r,ext),B=q(len,ext-r),a1=q(0,ext-r+k),a2=q(r-k,ext),b1=q(len-r+k,ext),b2=q(len,ext-r+k);
+      emit('cut',[q(0,0),q(0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(len-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(len,0)]);
+      out.polys[p.id]=[q(0,0),q(0,ext),q(len,ext),q(len,0)];
+    }else{
+      c=Math.min(ext*(p.kind==='glue'?0.5:0.3),len*0.25);
+      var pl=[pt(F,0,0),pt(F,c,ext),pt(F,len-c,ext),pt(F,len,0)];emit('cut',pl.map(function(q){return {x:q.x,y:q.y};}));out.polys[p.id]=pl;
+    }
+  }
+  var w=exprVal(root.w,P),h=exprVal(root.h,P);
+  out.polys[root.id]=[{x:0,y:0},{x:w,y:0},{x:w,y:h},{x:0,y:h}];out.labels.push({id:root.id,x:w/2,y:h/2,a:w,b:h});
+  edge(root,'t',{O:{x:0,y:0},u:{x:1,y:0},n:{x:0,y:-1},len:w});
+  edge(root,'b',{O:{x:0,y:h},u:{x:1,y:0},n:{x:0,y:1},len:w});
+  edge(root,'l',{O:{x:0,y:0},u:{x:0,y:1},n:{x:-1,y:0},len:h});
+  edge(root,'r',{O:{x:w,y:0},u:{x:0,y:1},n:{x:1,y:0},len:h});
+  out.paths.forEach(function(p,i){p.id=i+1;});
+  var cuts=out.paths.filter(function(p){return p.type==='cut';}),j=joinPaths(cuts,0.01);
+  out.paths=out.paths.filter(function(p){return !j.gone[p.id];});
+  return out;
+}
+function pointInPoly(pl,x,y){var c=false;for(var i=0,j=pl.length-1;i<pl.length;j=i++){var a=pl[i],b=pl[j];if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c;}return c;}
+if(typeof module!=='undefined')module.exports={boxTemplate:boxTemplate,buildBox:buildBox,exprVal:exprVal,pointInPoly:pointInPoly,axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
 </script>
 <script>
 /* ===== Interfejs ===== */
 (function(){
 var $=function(id){return document.getElementById(id);};
 var svg=$('cv'),world=$('world'),overlay=$('overlay');
-var S={paths:[],sel:new Set(),nsel:new Set(),tool:'select',view:'die',z:2,tx:40,ty:40,name:'przykład',meas:null,undo:[],nid:1,rot:'auto',hot:null};
+var S={paths:[],sel:new Set(),nsel:new Set(),mode:'box',box:null,selP:null,polys:{},plus:[],labels:[],tool:'select',view:'die',z:2,tx:40,ty:40,name:'pudełko',meas:null,undo:[],nid:1,rot:'auto',hot:null};
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
 var LBL={cut:'Cięcie',crease:'Bigowanie',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
@@ -610,8 +712,58 @@ function toast(t){var e=$('toast');e.textContent=t;e.style.display='block';clear
 function cfg(){var n=function(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d;};return {W:Math.max(10,n('iW',1010)),H:Math.max(10,n('iH',720)),m:Math.max(0,n('iM',12)),gap:Math.max(0,n('iG',3)),max:Math.max(0,Math.floor(n('iMax',0))),rot:S.rot,mk:$('iMk').checked?5:0};}
 function thk(){var v=parseFloat($('thk').value);return isFinite(v)?v:0;}
 function byId(id){for(var i=0;i<S.paths.length;i++)if(S.paths[i].id===id)return S.paths[i];return null;}
-function pushUndo(){S.undo.push(JSON.stringify(S.paths));if(S.undo.length>80)S.undo.shift();}
-function undo(){var u=S.undo.pop();if(!u){toast('Nie ma czego cofać.');return;}S.paths=JSON.parse(u);S.sel.clear();S.nsel.clear();refresh(true);}
+function pushUndo(){S.undo.push(JSON.stringify({mode:S.mode,paths:S.mode==='file'?S.paths:null,box:S.box,selP:S.selP,name:S.name}));if(S.undo.length>80)S.undo.shift();}
+function undo(){var u=S.undo.pop();if(!u){toast('Nie ma czego cofać.');return;}u=JSON.parse(u);S.box=u.box;S.selP=u.selP;S.name=u.name;if(u.paths)S.paths=u.paths;S.sel.clear();S.nsel.clear();
+  setMode(u.mode,true);regen();syncBox();refresh(true);renderPanelCard();}
+var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka'},BASE={S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
+function setMode(m,quiet){S.mode=m;var a=document.querySelector('.app');a.classList.toggle('m-box',m==='box');a.classList.toggle('m-file',m==='file');
+  if(m==='box'&&S.tool==='node')S.tool='select';if(!quiet)setTool(S.tool);}
+function regen(){if(S.mode!=='box'||!S.box)return;S.box.P.t=thk();var r=buildBox(S.box);S.paths=r.paths.map(function(p){p.id=S.nid++;return p;});S.polys=r.polys;S.plus=r.plus;S.labels=r.labels;
+  S.name='pudełko '+S.box.P.S+'×'+S.box.P.W+'×'+S.box.P.G;S.sel.clear();S.nsel.clear();}
+function panel(id){for(var i=0;i<S.box.panels.length;i++)if(S.box.panels[i].id===id)return S.box.panels[i];return null;}
+function syncBox(){if(!S.box)return;setVal('bS',S.box.P.S);setVal('bW',S.box.P.W);setVal('bG',S.box.P.G);}
+function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk()};S.box={P:P,panels:boxTemplate(tpl)};S.selP=null;regen();syncBox();}
+function exprOf(p,k){return k==='ext'?p.ext:p[k];}
+function dimRow(p,k,label){var e=exprOf(p,k),v=e.base==='num'?e.val:S.box.P[e.base]*(e.mul||1);
+  return '<div class="f"><span class="f__label">'+label+'<span class="pv" id="pv-'+k+'"></span></span><div class="grid2"><select data-k="'+k+'" id="pb-'+k+'" aria-label="Skąd wymiar">'+Object.keys(BASE).map(function(b){return '<option value="'+b+'"'+(b===e.base?' selected':'')+'>'+BASE[b]+'</option>';}).join('')+
+    '</select><input type="number" step="0.5" min="1" data-k="'+k+'" id="pn-'+k+'" value="'+(Math.round(v*100)/100)+'" aria-label="Wymiar mm"></div><div class="chips" data-k="'+k+'">'+[-2,-1,0,1,2].map(function(n){return '<button type="button" data-kt="'+n+'" aria-pressed="'+((e.kt||0)===n)+'">'+(n>0?'+':'')+(n?n+' × grubość':'bez poprawki')+'</button>';}).join('')+'</div></div>';}
+function renderPanelCard(){
+  var box=$('pcard');if(S.mode!=='box'||!S.box)return;var p=S.selP!=null?panel(S.selP):null;
+  if(!p){box.innerHTML='<p class="note">Kliknij ściankę na podglądzie, żeby zmienić jej wymiar. Plus przy krawędzi dodaje nową ściankę albo klejenie.</p>';$('subWall').textContent='';return;}
+  var h='';
+  if(p.parent==null)h+=dimRow(p,'w','Szerokość ścianki')+dimRow(p,'h','Wysokość ścianki');
+  else{h+='<div class="f"><span class="f__label">Rodzaj</span><div class="chips" id="kinds">'+Object.keys(KIND).map(function(k){return '<button type="button" data-setkind="'+k+'" aria-pressed="'+(p.kind===k)+'">'+KIND[k]+'</button>';}).join('')+'</div></div>';
+    h+=dimRow(p,'ext',p.kind==='wall'?'Wymiar ścianki':'Szerokość');
+    h+='<button class="btn is--danger" type="button" id="pDel">Usuń '+(p.kind==='wall'?'ściankę i wszystko za nią':'ten element')+'</button>';}
+  box.innerHTML=h;$('subWall').textContent=p.parent==null?'pierwsza':KIND[p.kind].toLowerCase();updatePv();
+}
+function updatePv(){var p=S.selP!=null&&S.box?panel(S.selP):null;if(!p)return;(p.parent==null?['w','h']:['ext']).forEach(function(k){var e=$('pv-'+k);if(e)e.textContent='= '+n1(exprVal(exprOf(p,k),S.box.P))+' mm';});}
+function boxChanged(full){regen();refresh();if(full)renderPanelCard();else updatePv();}
+$('pcard').addEventListener('input',function(e){var t=e.target;if(t.tagName!=='INPUT')return;var p=panel(S.selP),v=parseFloat(t.value);if(!p||!(v>=1))return;startEdit();
+  var ex=exprOf(p,t.dataset.k);ex.base='num';ex.val=v;ex.kt=0;delete ex.mul;$('pb-'+t.dataset.k).value='num';
+  t.closest('.f').querySelectorAll('[data-kt]').forEach(function(c){c.setAttribute('aria-pressed',c.dataset.kt==='0');});boxChanged(false);});
+$('pcard').addEventListener('change',function(e){var t=e.target;if(t.tagName!=='SELECT')return;var p=panel(S.selP);if(!p)return;pushUndo();var ex=exprOf(p,t.dataset.k);
+  if(t.value==='num'){ex.val=Math.round(exprVal({base:ex.base,val:ex.val,mul:ex.mul,kt:0},S.box.P)*100)/100;}ex.base=t.value;delete ex.mul;boxChanged(true);});
+$('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP):null;if(!p)return;var b=e.target.closest('button');if(!b)return;
+  if(b.dataset.kt!==undefined){pushUndo();exprOf(p,b.parentNode.dataset.k).kt=+b.dataset.kt;boxChanged(true);}
+  else if(b.dataset.setkind){var k=b.dataset.setkind;if(k===p.kind)return;pushUndo();
+    if(k!=='wall')removeKids(p.id);p.kind=k;p.ext=defExt(k,p);boxChanged(true);}
+  else if(b.id==='pDel')delPanel();});
+function removeKids(id){var gone={},again=true;while(again){again=false;S.box.panels.forEach(function(q){if(q.parent!=null&&(q.parent===id||gone[q.parent])&&!gone[q.id]){gone[q.id]=1;again=true;}});}
+  S.box.panels=S.box.panels.filter(function(q){return !gone[q.id];});}
+function delPanel(){var p=S.selP!=null?panel(S.selP):null;if(!p){toast('Najpierw kliknij ściankę.');return;}if(p.parent==null){toast('Pierwszej ścianki nie da się usunąć. Zmień jej wymiar albo zacznij od nowa.');return;}
+  pushUndo();removeKids(p.id);S.box.panels=S.box.panels.filter(function(q){return q.id!==p.id;});S.selP=null;boxChanged(true);}
+function defExt(kind,par){if(kind==='glue')return {base:'num',val:12,kt:0};if(kind==='tuck')return {base:'num',val:15,kt:0};if(kind==='dust')return {base:'G',mul:0.5,kt:0};
+  var pb=par&&par.ext?par.ext.base:'S';return {base:pb==='G'?'S':'G',kt:-1};}
+var menuAt=null,menu=$('menu');
+function closeMenu(){menu.style.display='none';menuAt=null;}
+menu.addEventListener('click',function(e){var b=e.target.closest('[data-kind]');if(!b||!menuAt)return;pushUndo();var id=1;S.box.panels.forEach(function(q){id=Math.max(id,q.id+1);});
+  S.box.panels.push({id:id,kind:b.dataset.kind,parent:menuAt.id,edge:menuAt.edge,ext:defExt(b.dataset.kind,panel(menuAt.id))});S.selP=id;closeMenu();boxChanged(true);});
+window.addEventListener('pointerdown',function(e){if(menuAt&&!e.target.closest('#menu')&&!e.target.closest('[data-plus]'))closeMenu();},true);
+['bS','bW','bG'].forEach(function(id){$(id).addEventListener('input',function(){var v=parseFloat($(id).value);if(!(v>=1)||!S.box)return;startEdit();S.box.P[id.charAt(1)]=v;boxChanged(false);});});
+$('tpl').addEventListener('click',function(e){var t=e.target.dataset.tpl;if(!t)return;pushUndo();newBox(t);refresh();renderPanelCard();fitView();});
+$('bNew').addEventListener('click',function(){pushUndo();setMode('box',true);newBox('tuck');setTool('select');renderPanelCard();fitView();});
+$('bFlat').addEventListener('click',function(){pushUndo();S.paths.forEach(function(p){p.id=S.nid++;});setMode('file');refresh(true);toast('Teraz edytujesz linie i punkty. Wymiary pudełka już nie przeliczają wykrojnika.');});
 function active(){return S.paths.filter(function(p){return p.type!=='ignore';});}
 
 /* --- podgląd --- */
@@ -632,6 +784,9 @@ function render(){
     markList(c).forEach(function(m){h+='<circle class="mark" cx="'+m.x+'" cy="'+m.y+'" r="'+m.r+'"/>';});
     if(L){h+='<defs><g id="die">';S.paths.forEach(function(p){if(p.type!=='ignore')h+='<path class="p t-'+p.type+'" d="'+pathD(p)+'"/>';});h+='</g></defs>';
       L.cells.forEach(function(q){h+='<use href="#die" transform="translate('+fmt(q.x)+' '+fmt(q.y)+')'+(L.rot?' translate('+fmt(L.b.h)+' 0) rotate(90)':'')+' translate('+fmt(-L.b.x)+' '+fmt(-L.b.y)+')"/>';});}
+  }else if(S.mode==='box'){
+    var sp=S.selP!=null?S.polys[S.selP]:null;if(sp)h+='<path class="psel" d="M'+sp.map(function(q){return fmt(q.x)+' '+fmt(q.y);}).join('L')+'Z"/>';
+    S.paths.forEach(function(p){h+='<path class="p t-'+p.type+'" d="'+pathD(p)+'"/>';});
   }else{
     S.paths.forEach(function(p){var d=pathD(p);h+='<path class="hit'+(S.sel.has(p.id)?' on':'')+'" data-id="'+p.id+'" d="'+d+'"/><path class="p t-'+p.type+'" d="'+d+'"/>';});
   }
@@ -640,7 +795,11 @@ function render(){
 }
 function renderOverlay(){
   var h='',sx=function(x){return x*S.z+S.tx;},sy=function(y){return y*S.z+S.ty;};
-  if(S.view==='die'){
+  if(S.view==='die'&&S.mode==='box'){
+    S.labels.forEach(function(l){if(Math.min(l.a,l.b)*S.z>26&&Math.max(l.a,l.b)*S.z>70)h+='<text class="lab'+(l.id===S.selP?' on':'')+'" text-anchor="middle" x="'+sx(l.x)+'" y="'+(sy(l.y)+4)+'">'+n1(l.a)+' × '+n1(l.b)+'</text>';});
+    S.plus.forEach(function(q){var x=sx(q.x)+q.nx*16,y=sy(q.y)+q.ny*16;h+='<g class="plus" data-plus="'+q.id+':'+q.edge+'"><circle cx="'+x+'" cy="'+y+'" r="8"/><path d="M'+(x-4)+' '+y+'h8M'+x+' '+(y-4)+'v8"/></g>';});
+  }
+  if(S.view==='die'&&S.mode==='file'){
     var b=bboxOf(active());
     if(b){
       var cx=axisCuts(S.paths,'x'),cy=axisCuts(S.paths,'y'),ty=sy(b.y)-14,tx=sx(b.x)-14,i;
@@ -677,7 +836,7 @@ function refresh(forceDims){
   act.forEach(function(p){if(len[p.type]!==undefined)len[p.type]+=pathLength(p);});
   var c=cfg(),L=layoutSheet(S.paths,c),dimT=b?n1(b.w)+' × '+n1(b.h)+' mm':'–',impT=L?L.count+' szt.':'–';
   $('status').innerHTML=b?'<b>'+esc(S.name)+'</b> · '+dimT+' · cięcie '+(len.cut/1000).toFixed(2).replace('.',',')+' m · bigowanie '+(len.crease/1000).toFixed(2).replace('.',',')+' m · arkusz '+impT:'Wczytaj plik, żeby zacząć.';
-  $('subPlik').textContent=S.name;$('subWym').textContent=dimT;$('subArk').textContent=L?impT+' · '+Math.round(L.util*100)+'%':'–';
+  $('subPlik').textContent=S.name;$('subMat').textContent=thk().toString().replace('.',',')+' mm';if(S.box)$('subBox').textContent=S.box.P.S+' × '+S.box.P.W+' × '+S.box.P.G;$('subWym').textContent=dimT;$('subArk').textContent=L?impT+' · '+Math.round(L.util*100)+'%':'–';
   $('impBig').textContent=L&&L.count?L.count+' szt. · '+L.cols+' × '+Math.ceil(L.count/L.cols)+(L.rot?' · obrót 90°':'')+' · '+Math.round(L.util*100)+'% arkusza':'Nie mieści się na arkuszu';
   if(b){setVal('scW',(Math.round(b.w*10)/10).toString());setVal('scH',(Math.round(b.h*10)/10).toString());}
   renderDims(forceDims);
@@ -696,7 +855,7 @@ function refresh(forceDims){
   info.sel=S.tool==='node'&&ns?'punkty: '+ns:ps?'linie: '+ps:'';showInfo();
 }
 var info={pos:'',sel:''};
-function showInfo(){var hint=S.view==='sheet'?'przeciągnij, żeby przesunąć widok':{select:'kliknij linię · Shift dodaje',node:'ramka zaznacza · dwuklik dodaje punkt',measure:'kliknij dwa punkty'}[S.tool];
+function showInfo(){var hint=S.view==='sheet'?'przeciągnij, żeby przesunąć widok':{select:S.mode==='box'?'kliknij ściankę · plus dodaje':'kliknij linię · Shift dodaje',node:'ramka zaznacza · dwuklik dodaje punkt',measure:'kliknij dwa punkty'}[S.tool];
   $('info').textContent=[info.sel,info.pos,hint].filter(Boolean).join('  ·  ');}
 
 /* --- karty: zwijanie --- */
@@ -734,8 +893,9 @@ function scaleTo(k){if(!(k>0)||!isFinite(k))return;var b=bboxOf(S.paths);startEd
 $('scW').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat($('scW').value);if(b&&v>=1)scaleTo(v/b.w);});
 $('scH').addEventListener('input',function(){var b=bboxOf(active()),v=parseFloat($('scH').value);if(b&&v>=1)scaleTo(v/b.h);});
 $('mat').innerHTML=MATS.map(function(m,i){return '<option value="'+i+'">'+esc(m[0])+'</option>';}).join('');
-$('mat').value='3';$('thk').value=MATS[3][1];
-$('mat').addEventListener('change',function(){$('thk').value=MATS[+$('mat').value][1];});
+$('mat').value='1';$('thk').value=MATS[1][1];
+$('mat').addEventListener('change',function(){$('thk').value=MATS[+$('mat').value][1];if(S.mode==='box'){pushUndo();boxChanged(false);}else refresh();});
+$('thk').addEventListener('input',function(){if(S.mode==='box'){startEdit();boxChanged(false);}else refresh();});
 $('thk').addEventListener('change',function(){MATS[+$('mat').value][1]=thk();try{localStorage.setItem('wykr-mats',JSON.stringify(MATS));}catch(e){}});
 
 /* --- impozycja na żywo --- */
@@ -749,6 +909,7 @@ function moveSel(dx,dy){
   return false;
 }
 function del(){
+  if(S.mode==='box'){delPanel();return;}
   if(S.tool==='node'&&S.nsel.size){pushUndo();var by={};S.nsel.forEach(function(k){var a=k.split(':');(by[a[0]]=by[a[0]]||[]).push(+a[1]);});
     Object.keys(by).forEach(function(id){var p=byId(+id);if(!p)return;by[id].sort(function(a,b){return b-a;}).forEach(function(i){deleteNode(p,i);});});
     S.paths=S.paths.filter(function(p){return p.pts.length>1;});S.nsel.clear();refresh(true);}
@@ -781,6 +942,11 @@ svg.addEventListener('pointerdown',function(e){
   var t=e.target,w=toWorld(e);try{svg.setPointerCapture(e.pointerId);}catch(x){}
   if(e.button===1||space||S.view==='sheet'){drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
   if(S.tool==='measure'){var p=snap(w);if(!S.meas||S.meas.b)S.meas={a:p,b:null,h:p};else S.meas.b=p;render();return;}
+  if(S.mode==='box'){var pl=t.closest&&t.closest('[data-plus]');
+    if(pl){var a0=pl.dataset.plus.split(':');menuAt={id:+a0[0],edge:a0[1]};menu.style.display='grid';menu.style.left=Math.min(e.clientX+8,window.innerWidth-220)+'px';menu.style.top=Math.min(e.clientY+8,window.innerHeight-190)+'px';return;}
+    var hitP=null,ar=Infinity;Object.keys(S.polys).forEach(function(id){var pg=S.polys[id];if(pointInPoly(pg,w.x,w.y)){var bb=Math.abs((pg[2].x-pg[0].x)*(pg[2].y-pg[0].y))||1;if(bb<ar){ar=bb;hitP=+id;}}});
+    if(hitP!==S.selP){S.selP=hitP;render();renderPanelCard();}
+    drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
   if(S.tool==='select'){var id=t.dataset&&t.dataset.id?+t.dataset.id:0;
     if(id){if(e.shiftKey){if(S.sel.has(id))S.sel.delete(id);else S.sel.add(id);}else if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);}
       drag={k:'move',last:w,moved:false};refresh();}
@@ -836,7 +1002,7 @@ function finishImport(paths,name){
   if(!paths.length){toast('W pliku nie ma linii wektorowych. Sprawdź, czy to nie obraz albo tekst.');return;}
   var b=bboxOf(paths),tm={};
   S.paths=paths.map(function(p){var q=mapPath(p,function(x,y){return [x-b.x,y-b.y];});q.id=S.nid++;q.src=p.src;q.type=tm[p.src]||(tm[p.src]=guessType(p.src));return q;});
-  S.undo=[];S.sel.clear();S.nsel.clear();S.name=name.replace(/\.[^.]+$/,'');
+  S.undo=[];S.sel.clear();S.nsel.clear();S.name=name.replace(/\.[^.]+$/,'');setMode('file',true);S.tool='select';
   refresh(true);fitView();toast('Wczytano '+S.paths.length+' linii. Sprawdź kartę Linie.');
 }
 function cssHex(c){var m=/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s\/]+([\d.]+))?/.exec(c||'');if(!m||(m[4]!==undefined&&+m[4]===0))return null;return hex(+m[1],+m[2],+m[3]);}
@@ -915,9 +1081,15 @@ function exportAs(kind){
 }
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
+/* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
+var VERSION='2026.11.12.3';$('ver').textContent='v'+VERSION;
+function checkVersion(){if(location.protocol==='file:')return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){if(j&&j.version&&j.version!==VERSION){$('bUpdate').hidden=false;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
+$('bUpdate').addEventListener('click',function(){location.reload();});
+setInterval(checkVersion,60000);document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion();});checkVersion();
+
 /* --- start: przykładowy wykrojnik --- */
-S.paths=samplePaths().map(function(p){p.id=S.nid++;return p;});
-setTool('select');
+newBox('tuck');
+setTool('select');renderPanelCard();
 requestAnimationFrame(fitView);
 })();
 </script>
