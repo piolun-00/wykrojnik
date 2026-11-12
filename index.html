@@ -793,8 +793,8 @@ function dimRow(p,k,label){var e=exprOf(p,k),v=e.base==='num'?e.val:S.box.P[e.ba
   return '<div class="f"><span class="f__label">'+label+'<span class="pv" id="pv-'+k+'"></span></span><div class="grid2"><select data-k="'+k+'" id="pb-'+k+'" aria-label="Skąd wymiar">'+Object.keys(BASE).map(function(b){return '<option value="'+b+'"'+(b===e.base?' selected':'')+'>'+BASE[b]+'</option>';}).join('')+
     '</select><input type="number" step="0.5" min="1" data-k="'+k+'" id="pn-'+k+'" value="'+(Math.round(v*100)/100)+'" aria-label="Wymiar mm"></div><div class="chips" data-k="'+k+'">'+[-2,-1,0,1,2].map(function(n){return '<button type="button" data-kt="'+n+'" aria-pressed="'+((e.kt||0)===n)+'">'+(n>0?'+':'')+(n?n+' × grubość':'bez poprawki')+'</button>';}).join('')+'</div></div>';}
 function renderPanelCard(){
-  var box=$('pcard');if(!S.box)return;var p=S.ctx==='box'&&S.selP!=null?panel(S.selP):null;
-  if(!p){box.innerHTML='<p class="note">'+(S.ctx==='box'?'Kliknij ściankę, żeby zmienić jej wymiar. Plus przy krawędzi dodaje ściankę albo klejenie. Esc wraca.':'Kliknij pudełko dwa razy albo zaznacz je i naciśnij Enter, żeby edytować ścianki.')+'</p>';$('subWall').textContent='';return;}
+  var box=$('pcard');if(!S.box)return;var p=S.ctx==='obj'&&S.selP!=null?panel(S.selP):null;
+  if(!p){box.innerHTML='<p class="note">Kliknij ściankę, żeby zmienić jej wymiar. Plus przy krawędzi dodaje ściankę albo klejenie.</p>';$('subWall').textContent='';return;}
   var h='';
   if(p.parent==null)h+=dimRow(p,'w','Szerokość ścianki')+dimRow(p,'h','Wysokość ścianki');
   else{h+='<div class="f"><span class="f__label">Rodzaj</span><div class="chips" id="kinds">'+Object.keys(KIND).map(function(k){return '<button type="button" data-setkind="'+k+'" aria-pressed="'+(p.kind===k)+'">'+KIND[k]+'</button>';}).join('')+'</div></div>';
@@ -824,7 +824,7 @@ $('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP)
   else if(b.id==='pDel')delPanel();});
 function removeKids(id){var gone={},again=true;while(again){again=false;S.box.panels.forEach(function(q){if(q.parent!=null&&(q.parent===id||gone[q.parent])&&!gone[q.id]){gone[q.id]=1;again=true;}});}
   S.box.panels=S.box.panels.filter(function(q){return !gone[q.id];});}
-function delPanel(){var p=S.selP!=null?panel(S.selP):null;if(!p){toast('Najpierw kliknij ściankę.');return;}if(p.parent==null){toast('Pierwszej ścianki nie da się usunąć. Zmień jej wymiar albo usuń całe pudełko.');return;}
+function delPanel(){var p=S.selP!=null?panel(S.selP):null;if(!p){toast('Najpierw kliknij ściankę.');return;}if(p.parent==null){toast('Pierwszej ścianki nie da się usunąć. Żeby usunąć całe pudełko, zaznacz je ramką i naciśnij Delete.');return;}
   pushUndo();removeKids(p.id);S.box.panels=S.box.panels.filter(function(q){return q.id!==p.id;});S.selP=null;boxChanged(true);}
 var menuAt=null,menu=$('menu');
 function closeMenu(){menu.style.display='none';menuAt=null;}
@@ -836,16 +836,19 @@ window.addEventListener('pointerdown',function(e){if(menuAt&&!e.target.closest('
   S.box.P[key]=v;boxChanged(false);});});
 $('tpl').addEventListener('click',function(e){var t=e.target.dataset.tpl;if(!t)return;pushUndo();newBox(t);refresh();renderPanelCard();fitView();});
 $('bNew').addEventListener('click',function(){pushUndo();S.free=[];S.box=null;leave(true);S.sel.clear();S.boxSel=false;newBox('tuck');refresh(true);renderPanelCard();fitView();});
-$('bFlat').addEventListener('click',function(){if(!S.box)return;pushUndo();S.bpaths.forEach(function(p){p.id=S.nid++;S.free.push(p);});S.box=null;leave(true);S.boxSel=false;S.name='wykrojnik';regen();refresh(true);
+$('bFlat').addEventListener('click',function(){if(!S.box)return;pushUndo();leave(true);flatten();refresh(true);renderPanelCard();
   toast('Pudełko jest teraz zwykłymi liniami. Wymiary już go nie przeliczają.');});
 
 /* --- poziomy: obiekty / ścianki / punkty --- */
-function leave(quiet){S.ctx='obj';S.selP=null;S.nsel.clear();S.edit.clear();closeMenu();if(!quiet){refresh();renderPanelCard();}}
+function leave(quiet){S.ctx='obj';S.nsel.clear();S.edit.clear();closeMenu();if(!quiet){refresh();renderPanelCard();}}
+function flatten(){S.bpaths.forEach(function(p){p.id=S.nid++;S.free.push(p);});var ids=S.bpaths.map(function(p){return p.id;});S.box=null;S.boxSel=false;S.selP=null;S.name='wykrojnik';regen();return ids;}
+/* głębszy poziom = punkty. Pudełko liczone z wymiarów nie ma własnych punktów, więc przy wejściu staje się zwykłymi liniami (Cofnij je przywraca). */
 function enter(){
   if(S.view!=='die')return;
-  if(S.boxSel&&S.box&&!S.sel.size){S.ctx='box';S.boxSel=false;refresh();renderPanelCard();return;}
-  if(S.sel.size){S.ctx='nodes';S.edit=new Set(S.sel);S.nsel.clear();refresh();return;}
-  toast('Najpierw zaznacz pudełko albo linię.');
+  if(S.sel.size){S.ctx='nodes';S.edit=new Set(S.sel);S.nsel.clear();S.selP=null;S.boxSel=false;refresh();renderPanelCard();return;}
+  if(S.box&&(S.boxSel||S.selP!=null)){pushUndo();var ids=flatten();S.sel=new Set(ids);S.ctx='nodes';S.edit=new Set(ids);S.nsel.clear();refresh(true);renderPanelCard();
+    toast('Edytujesz punkty. Pudełko jest teraz zwykłymi liniami i wymiary go nie przeliczają. Cofnij przywraca pudełko.');return;}
+  toast('Najpierw zaznacz ściankę albo linię.');
 }
 
 /* --- podgląd --- */
@@ -880,9 +883,9 @@ function render(){
     if(L){h+='<defs><g id="die">';S.paths.forEach(function(p){if(p.type!=='ignore')h+='<path class="p t-'+p.type+'" d="'+pathD(p)+'"/>';});h+='</g></defs>';
       L.cells.forEach(function(q){h+='<use href="#die" transform="translate('+fmt(q.x)+' '+fmt(q.y)+')'+(L.rot?' translate('+fmt(L.b.h)+' 0) rotate(90)':'')+' translate('+fmt(-L.b.x)+' '+fmt(-L.b.y)+')"/>';});}
   }else{
-    var sp=S.ctx==='box'&&S.selP!=null?S.polys[S.selP]:null;if(sp)h+='<path class="psel" d="M'+sp.map(function(q){return fmt(q.x)+' '+fmt(q.y);}).join('L')+'Z"/>';
+    var sp=S.ctx==='obj'&&S.selP!=null?S.polys[S.selP]:null;if(sp)h+='<path class="psel" d="M'+sp.map(function(q){return fmt(q.x)+' '+fmt(q.y);}).join('L')+'Z"/>';
     S.bpaths.forEach(function(p){h+='<path class="p t-'+p.type+(S.ctx==='nodes'?' dimmed':'')+'" d="'+pathD(p)+'"/>';});
-    S.free.forEach(function(p){var d=pathD(p),on=S.ctx==='nodes'?S.edit.has(p.id):S.sel.has(p.id);h+='<path class="hit'+(on?' on':'')+'" data-id="'+p.id+'" d="'+d+'"/><path class="p t-'+p.type+(S.ctx==='box'?' dimmed':'')+'" d="'+d+'"/>';});
+    S.free.forEach(function(p){var d=pathD(p),on=S.ctx==='nodes'?S.edit.has(p.id):S.sel.has(p.id);h+='<path class="hit'+(on?' on':'')+'" data-id="'+p.id+'" d="'+d+'"/><path class="p t-'+p.type+'" d="'+d+'"/>';});
   }
   world.innerHTML=h;world.setAttribute('transform','matrix('+S.z+' 0 0 '+S.z+' '+S.tx+' '+S.ty+')');
   renderOverlay();
@@ -891,9 +894,9 @@ function renderOverlay(){
   var h='',sx=function(x){return x*S.z+S.tx;},sy=function(y){return y*S.z+S.ty;},i;
   if(S.view==='die'){
     if(S.box){
-      S.labels.forEach(function(l){if(Math.min(l.a,l.b)*S.z>26&&Math.max(l.a,l.b)*S.z>70)h+='<text class="lab'+(S.ctx==='box'&&l.id===S.selP?' on':'')+'" text-anchor="middle" x="'+sx(l.x)+'" y="'+(sy(l.y)+4)+'">'+n1(l.a)+' × '+n1(l.b)+'</text>';});
-      if(S.ctx==='box')S.plus.forEach(function(q){var x=sx(q.x)+q.nx*16,y=sy(q.y)+q.ny*16;h+='<g class="plus" data-plus="'+q.id+':'+q.edge+'"><circle cx="'+x+'" cy="'+y+'" r="8"/><path d="M'+(x-4)+' '+y+'h8M'+x+' '+(y-4)+'v8"/></g>';});
-      if(S.ctx==='obj'&&S.boxSel){var bb=bboxOf(S.bpaths);if(bb)h+='<rect class="bsel" x="'+(sx(bb.x)-5)+'" y="'+(sy(bb.y)-5)+'" width="'+(bb.w*S.z+10)+'" height="'+(bb.h*S.z+10)+'"/>';}
+      S.labels.forEach(function(l){if(Math.min(l.a,l.b)*S.z>26&&Math.max(l.a,l.b)*S.z>70)h+='<text class="lab'+(S.ctx==='obj'&&l.id===S.selP?' on':'')+'" text-anchor="middle" x="'+sx(l.x)+'" y="'+(sy(l.y)+4)+'">'+n1(l.a)+' × '+n1(l.b)+'</text>';});
+      if(S.ctx==='obj'&&S.tool==='select')S.plus.forEach(function(q){var x=sx(q.x)+q.nx*16,y=sy(q.y)+q.ny*16;h+='<g class="plus" data-plus="'+q.id+':'+q.edge+'"><circle cx="'+x+'" cy="'+y+'" r="8"/><path d="M'+(x-4)+' '+y+'h8M'+x+' '+(y-4)+'v8"/></g>';});
+      if(S.ctx==='obj'&&S.boxSel&&S.selP==null){var bb=bboxOf(S.bpaths);if(bb)h+='<rect class="bsel" x="'+(sx(bb.x)-5)+'" y="'+(sy(bb.y)-5)+'" width="'+(bb.w*S.z+10)+'" height="'+(bb.h*S.z+10)+'"/>';}
     }else{
       var b=bboxOf(active());
       if(b){var cx=axisCuts(S.paths,'x'),cy=axisCuts(S.paths,'y'),ty=sy(b.y)-14,tx=sx(b.x)-14;
@@ -949,17 +952,17 @@ function refresh(forceDims){
   var sheet=S.view==='sheet';
   $('subZapis').textContent=sheet?'arkusz':'pojedynczy';
   $('saveNote').textContent=sheet?'Zapisuję cały arkusz ('+impT+'). Zwiń Impozycję, żeby zapisać pojedynczy wykrojnik.':'Zapisuję pojedynczy wykrojnik. Rozwiń Impozycję, żeby zapisać cały arkusz.';
-  $('crumb').innerHTML=sheet?'<b>Arkusz</b>':S.ctx==='box'?'<button class="link" type="button" id="crumbUp">Wykrojnik</button> › <b>Pudełko</b> <span>Esc wraca</span>':S.ctx==='nodes'?'<button class="link" type="button" id="crumbUp">Wykrojnik</button> › <b>Punkty</b> <span>Esc wraca</span>':'<b>Wykrojnik</b>';
-  info.sel=S.ctx==='nodes'?(S.nsel.size?'punkty: '+S.nsel.size:''):S.ctx==='obj'?[S.boxSel?'pudełko':'',S.sel.size?'linie: '+S.sel.size:''].filter(Boolean).join(' + '):'';showInfo();
+  $('crumb').innerHTML=sheet?'<b>Arkusz</b>':S.ctx==='nodes'?'<button class="link" type="button" id="crumbUp">Wykrojnik</button> › <b>Punkty</b> <span>Esc wraca</span>':'<b>Wykrojnik</b>';
+  info.sel=S.ctx==='nodes'?(S.nsel.size?'punkty: '+S.nsel.size:''):S.ctx==='obj'?[S.selP!=null?'ścianka':S.boxSel?'pudełko':'',S.sel.size?'linie: '+S.sel.size:''].filter(Boolean).join(' + '):'';showInfo();
 }
 var info={pos:'',sel:''};
 function showInfo(){var hint=S.view==='sheet'?'przeciągnij, żeby przesunąć widok':DRAW[S.tool]?'przeciągnij · Shift równo · Alt od środka':S.tool==='measure'?'kliknij dwa punkty':S.tool==='pan'?'przeciągnij widok':
-    S.ctx==='box'?'kliknij ściankę · plus dodaje':S.ctx==='nodes'?'ramka zaznacza · dwuklik na linii dodaje punkt':'dwuklik albo Enter wchodzi do środka';
+    S.ctx==='nodes'?'ramka zaznacza · dwuklik na linii dodaje punkt':S.box?'kliknij ściankę · plus dodaje · Enter otwiera punkty':'Enter albo dwuklik otwiera punkty';
   $('info').textContent=[info.sel,info.pos,hint].filter(Boolean).join('  ·  ');}
 $('crumb').addEventListener('click',function(e){if(e.target.id==='crumbUp')leave();});
 
 /* --- karty: zwijanie --- */
-function setView(v){if(S.view===v)return;S.view=v;S.meas=null;if(v==='sheet')leave(true);refresh();renderPanelCard();fitView();}
+function setView(v){if(S.view===v)return;S.view=v;S.meas=null;closeMenu();if(v==='sheet')leave(true);refresh();renderPanelCard();fitView();}
 document.querySelector('.panel').addEventListener('click',function(e){
   var t=e.target.closest('.card__title');if(!t)return;var c=t.parentNode,open=c.classList.toggle('is--open');
   t.querySelector('.card__chev').textContent=open?'▾':'▸';
@@ -1011,12 +1014,12 @@ function moveSel(dx,dy){
   return any;
 }
 function del(){
-  if(S.ctx==='box'){delPanel();return;}
+  if(S.ctx==='obj'&&!S.sel.size&&S.selP!=null){delPanel();return;}
   if(S.ctx==='nodes'){if(!S.nsel.size){toast('Zaznacz punkty do usunięcia.');return;}pushUndo();var by={};S.nsel.forEach(function(k){var a=k.split(':');(by[a[0]]=by[a[0]]||[]).push(+a[1]);});
     Object.keys(by).forEach(function(id){var p=byId(+id);if(!p)return;by[id].sort(function(a,b){return b-a;}).forEach(function(i){deleteNode(p,i);});});
     S.free=S.free.filter(function(p){return p.pts.length>1;});compose();S.nsel.clear();if(!editNodes().length)leave(true);refresh(true);return;}
   if(!S.sel.size&&!S.boxSel){toast('Najpierw coś zaznacz.');return;}
-  pushUndo();S.free=S.free.filter(function(p){return !S.sel.has(p.id);});S.sel.clear();if(S.boxSel){S.box=null;S.boxSel=false;S.name='wykrojnik';}regen();refresh(true);renderPanelCard();
+  pushUndo();S.free=S.free.filter(function(p){return !S.sel.has(p.id);});S.sel.clear();if(S.boxSel&&S.selP==null){S.box=null;S.boxSel=false;S.name='wykrojnik';}regen();refresh(true);renderPanelCard();
 }
 $('bDel').addEventListener('click',del);$('bUndo').addEventListener('click',undo);$('bFit').addEventListener('click',fitView);
 $('bJoin').addEventListener('click',function(){var set=S.sel.size?S.free.filter(function(p){return S.sel.has(p.id);}):S.free;pushUndo();
@@ -1051,20 +1054,17 @@ svg.addEventListener('pointerdown',function(e){
   if(e.button===1||space||S.tool==='pan'||S.view==='sheet'){drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
   if(S.tool==='measure'){var p=snap(w);if(!S.meas||S.meas.b)S.meas={a:p,b:null,h:p};else S.meas.b=p;render();return;}
   if(DRAW[S.tool]){var a=S.tool==='line'?snap(w):w;drag={k:'draw',a:a,b:a,e:{shiftKey:e.shiftKey,altKey:e.altKey},shape:null};return;}
-  if(S.ctx==='box'){var pl=t.closest&&t.closest('[data-plus]');
-    if(pl){var a0=pl.dataset.plus.split(':');menuAt={id:+a0[0],edge:a0[1]};menu.style.display='grid';menu.style.left=Math.min(e.clientX+8,window.innerWidth-220)+'px';menu.style.top=Math.min(e.clientY+8,window.innerHeight-190)+'px';return;}
-    var hp=boxAt(w);if(hp==null){leave();drag={k:'marq',a:w,b:w,add:false};return;}
-    if(hp!==S.selP){S.selP=hp;render();renderPanelCard();}
-    drag={k:'pan',x:e.clientX,y:e.clientY,tx:S.tx,ty:S.ty};return;}
+  var pl=S.ctx==='obj'&&t.closest&&t.closest('[data-plus]');
+  if(pl){var a0=pl.dataset.plus.split(':');menuAt={id:+a0[0],edge:a0[1]};menu.style.display='grid';menu.style.left=Math.min(e.clientX+8,window.innerWidth-220)+'px';menu.style.top=Math.min(e.clientY+8,window.innerHeight-190)+'px';return;}
   if(S.ctx==='nodes'){var k=t.dataset&&t.dataset.n;
     if(k){if(e.shiftKey){if(S.nsel.has(k))S.nsel.delete(k);else S.nsel.add(k);}else if(!S.nsel.has(k)){S.nsel.clear();S.nsel.add(k);}
       var gq=byId(+k.split(':')[0]).pts[+k.split(':')[1]];drag={k:'nmove',grab:k,moved:false,orig:{x:gq.x,y:gq.y}};refresh();}
     else drag={k:'marq',a:w,b:w,add:e.shiftKey,nodes:true};return;}
   var id=t.dataset&&t.dataset.id?+t.dataset.id:0;
-  if(id){if(e.shiftKey){if(S.sel.has(id))S.sel.delete(id);else S.sel.add(id);}else if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);S.boxSel=false;}
-    drag={k:'move',last:w,start:w,moved:false};refresh();return;}
-  if(S.box&&boxAt(w)!=null){if(e.shiftKey)S.boxSel=!S.boxSel;else if(!S.boxSel){S.sel.clear();S.boxSel=true;}
-    drag={k:'move',last:w,start:w,moved:false};refresh();return;}
+  if(id){if(e.shiftKey){if(S.sel.has(id))S.sel.delete(id);else S.sel.add(id);}else if(!S.sel.has(id)){S.sel.clear();S.sel.add(id);S.boxSel=false;S.selP=null;}
+    drag={k:'move',last:w,start:w,moved:false};refresh();renderPanelCard();return;}
+  var hp=S.box?boxAt(w):null;
+  if(hp!=null){if(!e.shiftKey)S.sel.clear();S.boxSel=true;S.selP=hp;drag={k:'move',last:w,start:w,moved:false};refresh();renderPanelCard();return;}
   drag={k:'marq',a:w,b:w,add:e.shiftKey};
 });
 svg.addEventListener('pointermove',function(e){
@@ -1085,7 +1085,7 @@ function endDrag(){
   if(d.k==='draw'){if(d.shape){pushUndo();var p=d.shape;p.id=S.nid++;p.type='cut';p.src='narysowane';S.free.push(p);compose();S.sel.clear();S.sel.add(p.id);S.boxSel=false;if(!S.box&&S.free.length===1)S.name='rysunek';setTool('select');refresh(true);}else render();return;}
   if(d.k==='marq'){var x0=Math.min(d.a.x,d.b.x),x1=Math.max(d.a.x,d.b.x),y0=Math.min(d.a.y,d.b.y),y1=Math.max(d.a.y,d.b.y),tiny=(x1-x0)*S.z<4&&(y1-y0)*S.z<4;
     if(d.nodes){if(!d.add)S.nsel.clear();if(!tiny)editNodes().forEach(function(n){if(n.x>=x0&&n.x<=x1&&n.y>=y0&&n.y<=y1)S.nsel.add(n.k);});}
-    else{if(!d.add){S.sel.clear();S.boxSel=false;}
+    else{if(!d.add){S.sel.clear();S.boxSel=false;}if(S.selP!=null){S.selP=null;renderPanelCard();}
       if(!tiny){S.free.forEach(function(p){var b=bboxOf([p]);if(b.x<=x1&&b.x+b.w>=x0&&b.y<=y1&&b.y+b.h>=y0)S.sel.add(p.id);});
         var bb=S.box?bboxOf(S.bpaths):null;if(bb&&bb.x<=x1&&bb.x+bb.w>=x0&&bb.y<=y1&&bb.y+bb.h>=y0)S.boxSel=true;}}}
   if(d.k!=='pan')refresh(d.k==='move'||d.k==='nmove');
@@ -1095,7 +1095,7 @@ svg.addEventListener('dblclick',function(e){
   if(S.tool!=='select'||S.view!=='die')return;var w=toWorld(e);
   if(S.ctx==='obj'){var id=e.target.dataset&&e.target.dataset.id?+e.target.dataset.id:0;
     if(id){S.sel.clear();S.sel.add(id);S.boxSel=false;enter();}
-    else if(S.box&&boxAt(w)!=null){S.sel.clear();S.boxSel=true;enter();S.selP=boxAt(w);render();renderPanelCard();}
+    else if(S.box&&boxAt(w)!=null){S.sel.clear();S.boxSel=true;enter();}
     return;}
   if(S.ctx==='nodes'){var best=null;
     S.free.forEach(function(p){if(!S.edit.has(p.id))return;var n=nearestOnPath(p,w.x,w.y);if(n.d<8/S.z&&(!best||n.d<best.n.d))best={p:p,n:n};});
@@ -1112,7 +1112,7 @@ window.addEventListener('keydown',function(e){
   if(S.tool==='poly'&&(k==='arrowup'||k==='arrowdown')){e.preventDefault();setSides(S.sides+(k==='arrowup'?1:-1));return;}
   if(k==='enter'){e.preventDefault();if(S.ctx==='obj')enter();else leave();}
   else if(k==='delete'||k==='backspace'){e.preventDefault();del();}
-  else if(k==='escape'){if(drag&&drag.k==='draw'){drag=null;render();}else if(S.tool!=='select')setTool('select');else if(S.ctx!=='obj')leave();else{S.sel.clear();S.boxSel=false;S.meas=null;refresh();}}
+  else if(k==='escape'){if(drag&&drag.k==='draw'){drag=null;render();}else if(S.tool!=='select')setTool('select');else if(S.ctx!=='obj')leave();else{S.sel.clear();S.boxSel=false;S.selP=null;S.meas=null;refresh();renderPanelCard();}}
   else if(k.indexOf('arrow')===0&&S.view==='die'){var s=e.shiftKey?1:0.1,d={arrowleft:[-s,0],arrowright:[s,0],arrowup:[0,-s],arrowdown:[0,s]}[k];
     if(d&&(S.sel.size||S.nsel.size||S.boxSel)){e.preventDefault();pushUndo();moveSel(d[0],d[1]);refresh();}}
 });
@@ -1205,7 +1205,7 @@ function exportAs(kind){
 $('exDxf').addEventListener('click',function(){exportAs('dxf');});$('exPdf').addEventListener('click',function(){exportAs('pdf');});$('exSvg').addEventListener('click',function(){exportAs('svg');});
 
 /* --- powiadomienie o nowej wersji: porównuję z version.json na serwerze --- */
-var VERSION='2026.11.12.10';$('ver').textContent='v'+VERSION;
+var VERSION='2026.11.12.11';$('ver').textContent='v'+VERSION;
 var latest='';
 function newer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(var i=0;i<Math.max(a.length,b.length);i++){var d=(a[i]||0)-(b[i]||0);if(d)return d>0;}return false;}
 function checkVersion(){if(location.protocol==='file:'||!window.fetch)return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(j){var nw=j&&j.version&&newer(j.version,VERSION);$('bUpdate').hidden=!nw;if(nw){latest=j.version;$('bUpdate').title='Dostępna wersja '+j.version;}}).catch(function(){});}
