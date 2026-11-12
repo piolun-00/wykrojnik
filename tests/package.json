@@ -1,0 +1,1 @@
+{ "name": "wykrojnik-tests", "private": true, "scripts": { "test": "node run.js" }, "dependencies": { "jsdom": "^24.1.0" } }

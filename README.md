@@ -1,15 +1,30 @@
-# Edytor wykrojników 2D
+# KHOREI — wykrojnik
 
-Draft narzędzia w przeglądarce do poprawiania wykrojników i układania impozycji pod ploter SINAJET DF1007-MT.
+Narzędzie w przeglądarce do budowania wykrojników pudełek, poprawiania plików i układania impozycji pod ploter SINAJET DF1007-MT.
 
-- Import: SVG, DXF, pierwsza strona PDF (typ linii po kolorze obrysu lub warstwie)
-- Typy linii: cięcie, bigowanie, perforacja, nacinanie, pomiń
-- Edycja: ścieżki i węzły, łączenie odcinków, miarka, korekta o grubość materiału
-- Impozycja: arkusz, margines, odstęp, obrót, znaczniki pasowania
-- Eksport: DXF (warstwy CUT, CREASE, PERF, KISSCUT, REG), PDF, SVG
+- **Pudełko** z wymiarów zewnętrznych (szerokość, wysokość, głębokość), grubości materiału i sposobu robienia zgięć; ścianki, klejenia, zakładki i klapki dodawane plusem
+- **Rysowanie**: prostokąt, elipsa, linia, wielokąt; skalowanie, obrót, wyrównywanie, rozkładanie, kopiuj / wklej
+- **Punkty**: Enter albo dwuklik otwiera edycję punktów (także na pudełku — przesunięcia trzymają się przy zmianie wymiarów)
+- **Import**: SVG, DXF, pierwsza strona PDF (rodzaj linii po kolorze obrysu lub warstwie)
+- **Impozycja**: arkusz, margines, odstęp, obrót, róg startowy, znaczniki pasowania
+- **Eksport**: DXF (warstwy CUT, CREASE, VCUT, PERF, KISSCUT, REG), PDF, SVG
 
-- Pudełko: szerokość, wysokość, głębokość (zewnętrzne) i grubość materiału; ścianki dodawane plusem
+## Pliki
 
-Przy każdej zmianie podbij wersję w `index.html` (`VERSION`) i w `version.json` — otwarta strona pokaże wtedy przycisk „Nowa wersja”.
+| Plik | Rola |
+|---|---|
+| `index.html` | szkielet strony |
+| `app/core.js` | geometria i formaty plików, bez przeglądarki (testowalne w Node) |
+| `app/ui.js` | interfejs |
+| `app/app.css` | wygląd (wzór: edytor brandmanuala) |
+| `tests/run.js` | testy geometrii i interfejsu (jsdom) |
 
-Całość to jeden plik `index.html`, bez serwera. Pliki zostają w przeglądarce.
+## Wersja i publikacja
+
+Każdy push na `main` uruchamia workflow `pages.yml`: najpierw testy, po zielonych publikacja na GitHub Pages.
+Numer wersji (`version.json`, `?v=` w `index.html`) nadaje workflow przy wdrożeniu z czasu commita. Otwarta strona co minutę
+porównuje swój numer z `version.json` i pokazuje pasek „Jest nowa wersja”. `scripts/release.sh` nadaje numer lokalnie.
+
+Workflow wymaga ustawienia Settings → Pages → Source: **GitHub Actions**.
+
+Testy lokalnie: `cd tests && npm install && npm test`.
