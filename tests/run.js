@@ -133,6 +133,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     assert.strictEqual(g('subWall').textContent, 'zakładka'); assert.strictEqual(d.querySelector('[data-lock="10"]').getAttribute('aria-pressed'), 'true'); d.querySelector('[data-rad="8"]').click();
     d.querySelector('[data-setkind=dust]').click(); d.querySelector('[data-shape=shoulder]').click(); d.querySelector('[data-flip]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
   });
+  await oka('kilka elementów z Shiftem: wspólna zmiana opcji i rodzaju prawym klikiem', () => {
+    click(200, 20); assert.strictEqual(g('subWall').textContent, 'klapka boczna'); click(396, 20, { shiftKey: true }); assert.ok(g('info').textContent.includes('elementy: 2')); assert.strictEqual(d.querySelectorAll('.psel').length, 2);
+    const before = d.querySelector('#world .t-cut').getAttribute('d'); d.querySelector('[data-shape=round]').click(); assert.notStrictEqual(d.querySelector('#world .t-cut').getAttribute('d'), before);
+    assert.strictEqual(d.querySelectorAll('.psel').length, 2); assert.strictEqual(d.querySelector('[data-shape=round]').getAttribute('aria-pressed'), 'true');
+    cv.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 20, button: 2 })); assert.strictEqual(g('menu').style.display, 'grid'); assert.ok(g('menu').textContent.includes('Zmień 2'));
+    d.querySelector('#menu [data-mi="3"]').click(); assert.strictEqual(g('subWall').textContent, 'klejenie'); assert.strictEqual(d.querySelectorAll('.psel').length, 2);
+    click(200, 400); cv.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 60, clientY: 60, button: 2 })); assert.ok(g('toast').textContent.includes('Pierwsza ścianka'));
+    g('bUndo').click(); g('bUndo').click(); key('Escape'); assert.strictEqual(d.querySelectorAll('.psel').length, 0);
+  });
   await oka('Enter otwiera punkty pudełka bez utraty pudełka; przesunięcie trzyma się wymiarów', () => {
     click(60, 60); key('Enter'); assert.ok(g('crumb').textContent.includes('Punkty')); assert.ok(!d.querySelector('[data-card=box]').hidden);
     const nd = [...d.querySelectorAll('.nd')]; assert.ok(nd.length > 20);
