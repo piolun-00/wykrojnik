@@ -72,6 +72,8 @@ ok('zamknięcia: zakładka z tabeli, klejenie, klapka z barkiem, wycięcie na pa
   const a = mk('tuck'), n1 = a.r.paths.find(p => p.type === 'cut').pts.length; a.b.panels.forEach(p => { if (p.kind === 'dust') p.shape = 'trap'; if (p.notch) p.notch = []; });
   const n2 = C.buildBox(a.b).paths.find(p => p.type === 'cut').pts.length; assert.ok(n1 > n2, 'bark i wycięcia dodają punkty');
   const rv = mk('tuckR'), tucks = rv.b.panels.filter(p => p.kind === 'tuck').map(p => rv.b.panels.find(q => q.id === p.parent).parent); assert.deepStrictEqual(tucks, [1, 3], 'odwrócone: wieczko na przodzie, dno na tyle');
+  const lk = mk('tuck'); lk.b.panels.forEach(p => { if (p.kind === 'tuck') p.lock = 4; if (p.kind === 'dust') p.shape = 'round'; }); const lr = C.buildBox(lk.b), slits = lr.paths.filter(p => p.type === 'cut' && !p.closed);
+  assert.strictEqual(slits.length, 4); assert.ok(lr.paths.find(p => p.type === 'cut' && p.closed)); slits.forEach(sp => { const ys = sp.pts.map(q => q.y), cr = Math.abs(ys[0]) > 50 ? (ys[0] > 0 ? 1 : -1) : -1; assert.ok(Math.max(...ys) - Math.min(...ys) > 0.5, 'haczyk przechodzi za big'); });
   const sn = mk('snap'); assert.deepStrictEqual(sn.b.panels.filter(p => /^snap/.test(p.kind)).map(p => p.kind), ['snapF', 'snapB']); assert.ok(sn.r.paths.find(p => p.type === 'cut').closed);
 });
 ok('DXF, PDF i SVG: zapis i odczyt', () => {

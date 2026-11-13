@@ -508,21 +508,25 @@ function buildBox(box){
   function edge(p,key,F,r0,r1){
     var ch=kids[p.id+':'+key],base=p.id+'/'+key;
     if(!ch){freeEdge(p,key,F,r0,r1);return;}
-    if(ch.kind==='tab'){place(ch,F,0);return;}
+    if(ch.kind==='tab'){place(ch,F,0,0);return;}
     /* klapki odsuwają się od krawędzi o wielokrotność grubości; klapka leżąca pod inną warstwą ma big cofnięty w głąb ścianki */
     var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
     var sk=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.sink&&ch.sink.kt!=null?ch.sink.kt:(ch.kind==='dust'?1:0))*P.t),F.len*0.3);
-    var lk=ch.kind==='tuck'&&ch.lock?Math.min(ch.lock,(F.len-2*ins)*0.2):0,L=[pt(F,0,0)],R=[];
-    if(sk>0.001)L.push(pt(F,0,-sk));if(ins>0.001)L.push(pt(F,ins,-sk));
+    var lk=ch.kind==='tuck'&&ch.lock?Math.min(Math.max(ch.lock,ins+1),(F.len-2*ins)*0.25):0,L=[pt(F,0,0)],R=[];
+    /* zamek szczelinowy: nacięcie zaczyna się na krawędzi wieczka, biegnie równolegle do bigu, ale odsunięte o grubość w stronę zakładki,
+       i kończy małym haczykiem zawiniętym za linię bigu. Zakładka zaczyna się dopiero od linii nacięcia, big biegnie między haczykami. */
+    var lift=lk>0.001?Math.max(P.t,0.3):0,b0=lift-sk;
+    if(Math.abs(b0)>0.001)L.push(pt(F,0,b0));if(ins>0.001)L.push(pt(F,ins,b0));
     if(L.length>1)emit('cut',L,base+'/L');
-    emit('crease',[pt(F,ins+lk,-sk),pt(F,F.len-ins-lk,-sk)],base+'/F');
-    if(ins>0.001)R.push(pt(F,F.len-ins,-sk));R.push(pt(F,F.len,-sk));if(sk>0.001)R.push(pt(F,F.len,0));
+    emit('crease',[pt(F,lk>0.001?lk:ins,-sk),pt(F,F.len-(lk>0.001?lk:ins),-sk)],base+'/F');
+    if(ins>0.001)R.push(pt(F,F.len-ins,b0));R.push(pt(F,F.len,b0));if(Math.abs(b0)>0.001)R.push(pt(F,F.len,0));
     if(R.length>1)emit('cut',R,base+'/R');
-    /* zamek zakładki: krótkie nacięcia na końcach bigu, za które zaczepiają się klapki boczne */
-    if(lk>0.001){emit('cut',[pt(F,ins,-sk),pt(F,ins+lk,-sk)],base+'/K1',slits);emit('cut',[pt(F,F.len-ins-lk,-sk),pt(F,F.len-ins,-sk)],base+'/K2',slits);}
-    place(ch,sk>0.001?{O:pt(F,0,-sk),u:F.u,n:F.n,len:F.len}:F,ins);
+    if(lk>0.001){var ov=0.3,rh=Math.min(0.4,(lift+ov)/2),kh=0.5523*rh;
+      [[function(a){return a;},'/K1'],[function(a){return F.len-a;},'/K2']].forEach(function(sd){var g=function(a,b){return pt(F,sd[0](a),b-sk);},e1=g(lk,lift-rh),c1=g(lk-rh+kh,lift),c2=g(lk,lift-rh+kh);
+        emit('cut',[g(ins,lift),g(lk-rh,lift),{x:e1.x,y:e1.y,c1x:c1.x,c1y:c1.y,c2x:c2.x,c2y:c2.y},g(lk,-ov)],base+sd[1],slits);});}
+    place(ch,sk>0.001?{O:pt(F,0,-sk),u:F.u,n:F.n,len:F.len}:F,ins,lift);
   }
-  function place(p,F,ins){
+  function place(p,F,ins,lift){
     var ext=p.ext.base==='auto'?Math.max(1,autoExt(p,F)+(p.ext.kt||0)*P.t):exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']&&kids[p.id+':o'].kind!=='tab'?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0),q=function(a,b){return pt(F,a,b);};out.dims[p.id]={ext:ext};
     if(p.kind==='wall'){
       fr[p.id]=F;
@@ -543,7 +547,7 @@ function buildBox(box){
         cs.forEach(function(cx,ci){var a0=cx-tw/2-0.5,a1=cx+tw/2+0.5;slits.push({type:'cut',src:'#ff0000',closed:true,fold:false,pts:[pt(Fo,a0,-sd-hw),pt(Fo,a1,-sd-hw),pt(Fo,a1,-sd+hw),pt(Fo,a0,-sd+hw)].map(function(v,vi){v.k=p.id+'/slot'+ci+'#'+vi;return v;})});});}
     }else if(p.kind==='tuck'){
       var r=Math.min(p.rad!=null?p.rad:4,ext*0.9,(L1-L0)*0.25),k=0.5523*r,A=q(L0+r,ext),B=q(L1,ext-r),a1=q(L0,ext-r+k),a2=q(L0+r-k,ext),b1=q(L1-r+k,ext),b2=q(L1,ext-r+k);
-      emit('cut',[q(L0,0),q(L0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(L1-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(L1,0)],p.id+'/out');
+      emit('cut',[q(L0,lift||0),q(L0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(L1-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(L1,lift||0)],p.id+'/out');
       out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
     }else if(p.kind==='snapB'||p.kind==='snapF'){
       /* dno zatrzaskowe: klapa tylna ma półokrągłe wycięcie, klapa przednia język, który wchodzi pod krawędź tylnej */
@@ -553,6 +557,11 @@ function buildBox(box){
       else{var tl=p.tongue!=null?p.tongue:Math.min(10,sp*0.15),rt=Math.min(3,tl*0.5,tw*0.25),kt2=0.5523*rt,x0=m-tw/2,x1=m+tw/2,ye=ext+tl;
         o.push(q(x0,ext),q(x0,ye-rt),cv(q(x0+rt,ye),q(x0,ye-rt+kt2),q(x0+rt-kt2,ye)),q(x1-rt,ye),cv(q(x1,ye-rt),q(x1-rt+kt2,ye),q(x1,ye-rt+kt2)),q(x1,ext));}
       o.push(q(L1-cc,ext),q(L1,ext-cc),q(L1,0));emit('cut',o,p.id+'/out');out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
+    }else if(p.kind==='dust'&&p.shape==='round'){
+      /* klapka zaokrąglona: prosty bok z zaokrąglonym rogiem od strony wieczka (początek krawędzi), z drugiej ćwierć elipsy schodząca do rogu bigu; flip zamienia strony */
+      var spR=L1-L0,rc=Math.min(spR*0.22,ext*0.4),aE=L1-rc,kk=0.5523,Ar=function(a){return p.flip?a:L0+L1-a;},gr=function(a,b){return q(Ar(a),b);},cvr=function(e,c1,c2){return {x:e.x,y:e.y,c1x:c1.x,c1y:c1.y,c2x:c2.x,c2y:c2.y};};
+      emit('cut',[gr(L0,0),cvr(gr(aE,ext),gr(L0,kk*ext),gr(aE-kk*(aE-L0),ext)),cvr(gr(L1,ext-rc),gr(aE+kk*rc,ext),gr(L1,ext-rc+kk*rc)),gr(L1,0)],p.id+'/out');
+      out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
     }else if(p.kind==='dust'&&p.shape==='shoulder'&&L1-L0>ext*0.9){
       /* klapka z barkiem: od strony wieczka małe podcięcie i prawie prosty bok, z drugiej zaokrąglony róg, skos i bark przy bigu; flip zamienia strony */
       var sp2=L1-L0,c1=Math.min(2,ext*0.1,sp2*0.05),lean=ext*0.04,sh=Math.min(6,ext*0.3),ch2=Math.min(2,sh*0.5),tp=Math.min(ext*0.25,sp2*0.2),rr=Math.min(ext*0.25,sp2*0.15);
