@@ -177,6 +177,21 @@ function removeLoops(p,maxLen){
       seen[k]=i;}}
   return p;
 }
+/* usuwa „ząbki”: malutkie prostokątne występy (wyjście, odcinek, powrót o tę samą długość), które zostają w rogu,
+   gdy dwie sąsiednie klapki są cofnięte o grubość — sam narożnik ścianki nie ma wtedy żadnej funkcji */
+function removeBumps(p,maxSize){
+  var a=p.pts,changed=true,guard=0;
+  while(changed&&a.length>6&&guard++<200){changed=false;var n=a.length;
+    for(var i=0;i<n;i++){
+      if(!p.closed&&i+3>=n)break;
+      var P1=a[i],P2=a[(i+1)%n],P3=a[(i+2)%n],P4=a[(i+3)%n];if(hasC(P2)||hasC(P3)||hasC(P4))continue;
+      var ax=P2.x-P1.x,ay=P2.y-P1.y,bx=P3.x-P2.x,by=P3.y-P2.y,cx=P4.x-P3.x,cy=P4.y-P3.y,la=Math.hypot(ax,ay),lb=Math.hypot(bx,by),lc=Math.hypot(cx,cy);
+      if(la<1e-6||lb<1e-6||la>maxSize||lb>maxSize||Math.abs(la-lc)>1e-6)continue;
+      if(Math.abs(ax*bx+ay*by)>1e-6*la*lb||Math.abs(ax+cx)>1e-6||Math.abs(ay+cy)>1e-6)continue;
+      var i2=(i+1)%n,i3=(i+2)%n;if(i3>i2)a.splice(i2,2);else{a.splice(i2,1);a.splice(i3,1);}
+      changed=true;break;}}
+  return p;
+}
 function reversePath(p){
   var a=p.pts,n=a.length,r=[];
   for(var i=n-1;i>=0;i--){var o={x:a[i].x,y:a[i].y};if(a[i].k)o.k=a[i].k;r.push(o);}
@@ -603,7 +618,7 @@ function buildBox(box){
   out.paths.forEach(function(p,i){p.id=i+1;});
   var cuts=out.paths.filter(function(p){return p.type==='cut'&&slits.indexOf(p)<0;}),j=joinPaths(cuts,0.01);
   out.paths=out.paths.filter(function(p){return !j.gone[p.id];});
-  cuts.forEach(function(p){if(!j.gone[p.id]){removeSpikes(p);removeLoops(p,Math.max(8,P.t*12));removeSpikes(p);}});
+  cuts.forEach(function(p){if(!j.gone[p.id]){removeSpikes(p);removeLoops(p,Math.max(8,P.t*12));removeSpikes(p);removeBumps(p,P.t*2.2+0.01);removeSpikes(p);}});
   out.paths.forEach(function(p){p.pts.forEach(function(q){q.ks=loc[Math.round(q.x*1000)+','+Math.round(q.y*1000)]||[q.k];});});
   /* punkty usunięte ręcznie */
   var dels=box.dels||[];

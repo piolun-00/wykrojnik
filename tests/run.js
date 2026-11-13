@@ -55,6 +55,16 @@ ok('obrys nie zamyka małych pętli, gdy cofnięte bigi dwóch klapek spotykają
     C.buildBox(b).paths.filter(p => p.type === 'cut').forEach(p => { const seen = new Set(); p.pts.forEach(q => { const k = Math.round(q.x * 1000) + ',' + Math.round(q.y * 1000); assert.ok(!seen.has(k), tpl + ' gap ' + gap + ' sink ' + sink + ': pętla przy ' + k); seen.add(k); }); });
   }
 });
+ok('obrys bez ząbków: zakładka z zamkiem obok klapki z cofniętym bigiem na boku wieczka', () => {
+  for (const tt of [0.4, 1.5]) for (const kind of ['glue', 'dust']) {
+    const b = { P: { S: 60, W: 100, G: 40, t: tt, fold: 'crease' }, panels: C.boxTemplate('tuck') }; const lid = b.panels.find(p => p.kind === 'tuck').parent;
+    b.panels.forEach(p => { if (p.kind === 'tuck') p.lock = 4; }); b.panels.push({ id: 90, kind, parent: lid, edge: 'b', ext: { base: 'num', val: 12, kt: 0 }, sink: { kt: 1 }, shape: 'trap' });
+    const m = C.buildBox(b).paths.find(p => p.type === 'cut' && p.closed), a = m.pts, n = a.length;
+    for (let i = 0; i < n; i++) { const P = [0, 1, 2, 3].map(k => a[(i + k) % n]); if (P.slice(1).some(q => q.c1x !== undefined)) continue;
+      const v = [0, 1, 2].map(k => [P[k + 1].x - P[k].x, P[k + 1].y - P[k].y]), L = v.map(w => Math.hypot(w[0], w[1]));
+      assert.ok(!(L[0] < 2.3 * tt && L[1] < 2.3 * tt && L[0] > 1e-6 && Math.abs(L[0] - L[2]) < 1e-6 && Math.abs(v[0][0] + v[2][0]) < 1e-6 && Math.abs(v[0][1] + v[2][1]) < 1e-6), 'ząbek przy ' + P[1].x.toFixed(2) + ',' + P[1].y.toFixed(2)); }
+  }
+});
 ok('pudełko wysyłkowe: zawijane boki, wypustki i szczeliny w dnie; punkty dodane i usunięte', () => {
   for (const tt of [0.5, 1.5, 3]) { const r = C.buildBox({ P: { S: 200, W: 60, G: 150, t: tt, fold: 'crease' }, panels: C.boxTemplate('mailer') });
     assert.match(cutShape(r), /^\d+c,4c,4c,4c,4c$/, cutShape(r)); assert.strictEqual(Object.keys(r.clash).length, 0); }
