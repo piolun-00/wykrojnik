@@ -48,6 +48,13 @@ ok('obrys bez wiszących nacięć (odcinków tam i z powrotem)', () => {
         assert.ok(!(la > 1e-6 && lb > 1e-6 && Math.abs(ax * by - ay * bx) < 1e-6 * la * lb && ax * bx + ay * by < 0), tp + ' t=' + tt + ' wąs przy ' + q.x + ',' + q.y); } });
   }
 });
+ok('obrys nie zamyka małych pętli, gdy cofnięte bigi dwóch klapek spotykają się w rogu', () => {
+  for (const tpl of ['tuck', 'tuckR', 'snap']) for (const gap of [0, 1, 2]) for (const sink of [0, 1, 2]) for (const flip of [0, 1]) {
+    const b = { P: { S: 60, W: 100, G: 40, t: 0.4, fold: 'crease' }, panels: C.boxTemplate(tpl) };
+    b.panels.forEach(p => { if (p.kind !== 'wall') { p.gap = { kt: gap }; p.sink = { kt: sink }; if (flip) p.flip = !p.flip; } });
+    C.buildBox(b).paths.filter(p => p.type === 'cut').forEach(p => { const seen = new Set(); p.pts.forEach(q => { const k = Math.round(q.x * 1000) + ',' + Math.round(q.y * 1000); assert.ok(!seen.has(k), tpl + ' gap ' + gap + ' sink ' + sink + ': pętla przy ' + k); seen.add(k); }); });
+  }
+});
 ok('pudełko wysyłkowe: zawijane boki, wypustki i szczeliny w dnie; punkty dodane i usunięte', () => {
   for (const tt of [0.5, 1.5, 3]) { const r = C.buildBox({ P: { S: 200, W: 60, G: 150, t: tt, fold: 'crease' }, panels: C.boxTemplate('mailer') });
     assert.match(cutShape(r), /^\d+c,4c,4c,4c,4c$/, cutShape(r)); assert.strictEqual(Object.keys(r.clash).length, 0); }

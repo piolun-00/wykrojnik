@@ -166,6 +166,17 @@ function removeSpikes(p){
       if(Math.abs(ax*by-ay*bx)<1e-6*la*lb&&ax*bx+ay*by<0){a.splice(i,1);changed=true;break;}}}
   return p;
 }
+/* usuwa małe pętle: gdy obrys wraca do punktu, w którym już był (np. dwa cofnięte bigi spotykają się w rogu i zamykają kwadracik odpadu) */
+function removeLoops(p,maxLen){
+  var a=p.pts,changed=true,guard=0;
+  while(changed&&a.length>4&&guard++<200){changed=false;var seen={};
+    for(var i=0;i<a.length;i++){var k=Math.round(a[i].x*1000)+','+Math.round(a[i].y*1000),j=seen[k];
+      if(j===undefined){seen[k]=i;continue;}
+      var len=0,curve=false;for(var m=j+1;m<=i;m++){if(hasC(a[m]))curve=true;len+=Math.hypot(a[m].x-a[m-1].x,a[m].y-a[m-1].y);}
+      if(!curve&&len<=maxLen){a.splice(j+1,i-j);changed=true;break;}
+      seen[k]=i;}}
+  return p;
+}
 function reversePath(p){
   var a=p.pts,n=a.length,r=[];
   for(var i=n-1;i>=0;i--){var o={x:a[i].x,y:a[i].y};if(a[i].k)o.k=a[i].k;r.push(o);}
@@ -583,7 +594,7 @@ function buildBox(box){
   out.paths.forEach(function(p,i){p.id=i+1;});
   var cuts=out.paths.filter(function(p){return p.type==='cut'&&slits.indexOf(p)<0;}),j=joinPaths(cuts,0.01);
   out.paths=out.paths.filter(function(p){return !j.gone[p.id];});
-  cuts.forEach(function(p){if(!j.gone[p.id])removeSpikes(p);});
+  cuts.forEach(function(p){if(!j.gone[p.id]){removeSpikes(p);removeLoops(p,Math.max(8,P.t*12));removeSpikes(p);}});
   out.paths.forEach(function(p){p.pts.forEach(function(q){q.ks=loc[Math.round(q.x*1000)+','+Math.round(q.y*1000)]||[q.k];});});
   /* punkty usunięte ręcznie */
   var dels=box.dels||[];

@@ -122,7 +122,7 @@ $('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP)
   else if(b.dataset.sink!==undefined){pushUndo();p.sink={kt:+b.dataset.sink};boxChanged(true);}
   else if(b.dataset.gap!==undefined){pushUndo();p.gap={kt:+b.dataset.gap};boxChanged(true);}
   else if(b.dataset.kt!==undefined){pushUndo();exprOf(p,b.parentNode.dataset.k).kt=+b.dataset.kt;boxChanged(true);}
-  else if(b.dataset.setkind){var k=b.dataset.setkind;if(k===p.kind)return;pushUndo();if(k!=='wall')removeKids(p.id);p.kind=k;p.ext=defExt(k,panel(p.parent),null);boxChanged(true);}
+  else if(b.dataset.setkind){var k=b.dataset.setkind;if(k===p.kind)return;pushUndo();if(k!=='wall')removeKids(p.id);p.kind=k;p.ext=defExt(k,panel(p.parent),null);['sink','gap','shape','flip','lock','rad','under','underE','notch','tongue'].forEach(function(f){delete p[f];});if(k==='dust')p.shape='shoulder';boxChanged(true);}
   else if(b.id==='pDel')delPanel();});
 function removeKids(id){var gone={},again=true;while(again){again=false;S.box.panels.forEach(function(q){if(q.parent!=null&&(q.parent===id||gone[q.parent])&&!gone[q.id]){gone[q.id]=1;again=true;}});}
   S.box.panels=S.box.panels.filter(function(q){return !gone[q.id];});}
