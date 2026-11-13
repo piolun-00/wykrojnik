@@ -137,3 +137,8 @@ button{cursor:pointer}
 .psel.key{fill-opacity:.12;stroke:var(--fg);stroke-width:2;vector-effect:non-scaling-stroke}
 .saved{color:var(--muted);white-space:nowrap}
 .saved.is--warn{color:#b25c00;font-weight:600}
+.menu__item{position:relative;display:grid}
+.menu__sub{display:none;position:absolute;left:100%;top:-9px;min-width:220px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.08);padding:8px;gap:2px;z-index:1}
+.menu.is--left .menu__sub{left:auto;right:100%}
+.menu__item:hover>.menu__sub,.menu__item:focus-within>.menu__sub{display:grid}
+.menu__item:hover>button,.menu__item:focus-within>button{background:var(--soft)}

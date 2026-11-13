@@ -7,7 +7,7 @@ const oka = async (name, fn) => { await fn(); n++; console.log('ok  ' + name); }
 const cutShape = r => r.paths.filter(p => p.type === 'cut').map(p => p.pts.length + (p.closed ? 'c' : 'o')).join(',');
 
 ok('szablony dają jeden zamknięty obrys i nie kolidują', () => {
-  for (const fold of ['crease', 'vin', 'vout']) for (const t of ['tuck', 'tray', 'sleeve', 'mailer', 'one']) {
+  for (const fold of ['crease', 'vin', 'vout']) for (const t of ['tuck', 'tuckR', 'snap', 'tray', 'sleeve', 'mailer', 'one']) {
     const r = C.buildBox({ P: { S: 60, W: 100, G: 40, t: 0.5, fold }, panels: C.boxTemplate(t) });
     assert.match(cutShape(r), t === 'mailer' ? /^\d+c(,4c){4}$/ : /^\d+c$/, t + '/' + fold + ': ' + cutShape(r));
     assert.strictEqual(Object.keys(r.clash).length, 0, t + ' kolizja');
@@ -40,7 +40,7 @@ ok('zamek zakładki, przesunięcia punktów i kolizje', () => {
   assert.ok(Object.keys(C.buildBox(box).clash).length >= 2);
 });
 ok('obrys bez wiszących nacięć (odcinków tam i z powrotem)', () => {
-  for (const tt of [0.5, 2, 10]) for (const tp of ['tuck', 'mailer', 'tray', 'sleeve']) {
+  for (const tt of [0.5, 2, 10]) for (const tp of ['tuck', 'tuckR', 'snap', 'mailer', 'tray', 'sleeve']) {
     const r = C.buildBox({ P: { S: 60, W: 100, G: 40, t: tt, fold: 'crease' }, panels: C.boxTemplate(tp) });
     r.paths.filter(p => p.type === 'cut' && p.closed).forEach(p => { const a = p.pts, n = a.length;
       for (let i = 0; i < n; i++) { const pv = a[(i - 1 + n) % n], q = a[i], nx = a[(i + 1) % n]; if (q.c1x !== undefined || nx.c1x !== undefined) continue;
@@ -56,6 +56,16 @@ ok('pudełko wysyłkowe: zawijane boki, wypustki i szczeliny w dnie; punkty doda
   box.splits.push({ id: 1, a: cp.pts[10].ks, b: cp.pts[11].ks, t: 0.5 }); r = C.buildBox(box);
   assert.strictEqual(r.paths.find(p => p.type === 'cut').pts.length, n0 + 1);
   box.dels.push(cp.pts[20].ks[0]); box.P.W = 120; r = C.buildBox(box); const c3 = r.paths.find(p => p.type === 'cut'); assert.strictEqual(c3.pts.length, n0); assert.ok(c3.closed);
+});
+ok('zamknięcia: zakładka z tabeli, klejenie, klapka z barkiem, wycięcie na palec, dno 1-2-3', () => {
+  const mk = (tpl, P) => { const b = { P: Object.assign({ S: 60, W: 100, G: 40, t: 0.5, fold: 'crease' }, P), panels: C.boxTemplate(tpl) }; return { b, r: C.buildBox(b) }; };
+  const ext = (x, kind) => x.b.panels.filter(p => p.kind === kind).map(p => x.r.dims[p.id].ext);
+  assert.deepStrictEqual(ext(mk('tuck', { G: 40 }), 'tuck'), [20, 20]); assert.deepStrictEqual(ext(mk('tuck', { G: 22 }), 'tuck'), [13, 13]); assert.deepStrictEqual(ext(mk('tuck', { G: 120 }), 'tuck'), [25, 25]);
+  assert.deepStrictEqual(ext(mk('tuck', { W: 50 }), 'glue'), [10]); assert.deepStrictEqual(ext(mk('tuck', { W: 200 }), 'glue'), [16]);
+  const a = mk('tuck'), n1 = a.r.paths.find(p => p.type === 'cut').pts.length; a.b.panels.forEach(p => { if (p.kind === 'dust') p.shape = 'trap'; if (p.notch) p.notch = []; });
+  const n2 = C.buildBox(a.b).paths.find(p => p.type === 'cut').pts.length; assert.ok(n1 > n2, 'bark i wycięcia dodają punkty');
+  const rv = mk('tuckR'), tucks = rv.b.panels.filter(p => p.kind === 'tuck').map(p => rv.b.panels.find(q => q.id === p.parent).parent); assert.deepStrictEqual(tucks, [1, 3], 'odwrócone: wieczko na przodzie, dno na tyle');
+  const sn = mk('snap'); assert.deepStrictEqual(sn.b.panels.filter(p => /^snap/.test(p.kind)).map(p => p.kind), ['snapF', 'snapB']); assert.ok(sn.r.paths.find(p => p.type === 'cut').closed);
 });
 ok('DXF, PDF i SVG: zapis i odczyt', () => {
   const S = C.samplePaths(); S.forEach((p, i) => p.id = i + 1);
@@ -97,9 +107,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   });
   await oka('ścianka: klik, karta, plus, nowa ścianka bierze wymiar sąsiada, usunięcie', () => {
     click(60, 60); assert.strictEqual(g('subWall').textContent, 'pierwsza'); assert.ok(g('pv-w').textContent.includes('59,8'));
-    pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-kind=wall]').click();
+    pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-mi="0"]').click();
     assert.ok(g('pv-ext').textContent.includes('39,8'), g('pv-ext').textContent); assert.strictEqual(d.querySelectorAll('.plus').length, 9);
-    d.querySelector('[data-under="1"]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
+    d.querySelector('[data-under="1"]').click(); d.querySelector('[data-notch="a"]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
+    assert.strictEqual(d.querySelectorAll('#menu .menu__sub').length, 3); pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-mi="1"][data-si="1"]').click();
+    assert.strictEqual(g('subWall').textContent, 'zakładka'); assert.strictEqual(d.querySelector('[data-lock="10"]').getAttribute('aria-pressed'), 'true'); d.querySelector('[data-rad="8"]').click();
+    d.querySelector('[data-setkind=dust]').click(); d.querySelector('[data-shape=shoulder]').click(); d.querySelector('[data-flip]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
   });
   await oka('Enter otwiera punkty pudełka bez utraty pudełka; przesunięcie trzyma się wymiarów', () => {
     click(60, 60); key('Enter'); assert.ok(g('crumb').textContent.includes('Punkty')); assert.ok(!d.querySelector('[data-card=box]').hidden);
@@ -156,7 +169,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     d.querySelector('[data-card=arkusz] .card__title').click(); assert.ok(/szt\./.test(g('impBig').textContent)); assert.ok(d.querySelector('#world use').getAttribute('transform').startsWith('translate(12 12)'));
     d.querySelector('[data-corner=br]').click(); assert.ok(!d.querySelector('#world use').getAttribute('transform').startsWith('translate(12 12)'));
     d.querySelector('[data-card=arkusz] .card__title').click();
-    for (const t of ['mailer', 'tray', 'sleeve', 'tuck']) { d.querySelector('[data-tpl=' + t + ']').click(); assert.ok(!g('status').textContent.includes('nachodzą'), t); }
+    for (const t of ['mailer', 'tray', 'sleeve', 'snap', 'tuckR', 'tuck']) { d.querySelector('[data-tpl=' + t + ']').click(); assert.ok(!g('status').textContent.includes('nachodzą'), t); }
     const nb = d.querySelectorAll('.hit').length; g('bFlat').click(); assert.ok(d.querySelector('[data-card=box]').hidden); assert.ok(d.querySelectorAll('.hit').length > nb);
     g('bUndo').click(); assert.ok(!d.querySelector('[data-card=box]').hidden); g('exDxf').click(); g('exPdf').click(); g('exSvg').click();
   });

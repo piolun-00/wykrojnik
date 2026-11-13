@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KHOREI — wykrojnik</title>
-<link rel="stylesheet" href="app/app.css?v=2026.11.12.1611">
+<link rel="stylesheet" href="app/app.css?v=2026.11.13.1725">
 </head>
 <body>
 <div class="app">
@@ -43,7 +43,7 @@
         </div>
         <label class="check"><input type="checkbox" id="bLock"> Zachowaj proporcje (albo przytrzymaj Shift)</label>
         <p class="note">Wymiar zewnętrzny złożonego pudełka w mm. Liczby na ściankach to odległości między bigami.</p>
-        <div class="f"><span class="f__label">Zacznij od</span><div class="chips" id="tpl"><button type="button" data-tpl="tuck">Pudełko z zakładkami</button><button type="button" data-tpl="mailer">Pudełko wysyłkowe</button><button type="button" data-tpl="tray">Taca</button><button type="button" data-tpl="sleeve">Rękaw</button><button type="button" data-tpl="one">Jedna ścianka</button></div></div>
+        <div class="f"><span class="f__label">Zacznij od</span><div class="chips" id="tpl"><button type="button" data-tpl="tuck">Zakładki proste</button><button type="button" data-tpl="tuckR">Zakładki odwrócone</button><button type="button" data-tpl="snap">Dno zatrzaskowe</button><button type="button" data-tpl="mailer">Pudełko wysyłkowe</button><button type="button" data-tpl="tray">Taca</button><button type="button" data-tpl="sleeve">Rękaw</button><button type="button" data-tpl="one">Jedna ścianka</button></div></div>
         <button class="btn" type="button" id="bOv" hidden>Przywróć przesunięte punkty pudełka</button>
       </div>
     </div>
@@ -135,11 +135,11 @@
     <div class="dock" role="toolbar" aria-label="Narzędzia"><div class="dock__tools" id="dockTools"></div><div class="dock__sides" id="sidesBox" hidden><button type="button" data-d="-1" aria-label="Mniej boków">−</button><span><b id="sidesN">3</b> boki</span><button type="button" data-d="1" aria-label="Więcej boków">+</button></div></div>
   </div>
 </div>
-<div class="menu" id="menu"><span class="menu__label">Dodaj przy tej krawędzi</span><button type="button" data-kind="wall">Ścianka</button><button type="button" data-kind="glue">Klejenie <small>skośne boki</small></button><button type="button" data-kind="tuck">Zakładka <small>zaokrąglona</small></button><button type="button" data-kind="dust">Klapka <small>boczna</small></button><button type="button" data-kind="tab">Wypustki <small>bez bigu</small></button></div>
+<div class="menu" id="menu"></div>
 <div id="toast" role="status"></div>
 <div id="drop">Upuść plik SVG, DXF lub PDF</div>
 
-<script src="app/core.js?v=2026.11.12.1611"></script>
-<script src="app/ui.js?v=2026.11.12.1611"></script>
+<script src="app/core.js?v=2026.11.13.1725"></script>
+<script src="app/ui.js?v=2026.11.13.1725"></script>
 </body>
 </html>

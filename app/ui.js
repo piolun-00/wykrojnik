@@ -10,7 +10,13 @@ var S={free:[],bpaths:[],paths:[],box:null,ctx:'obj',boxSel:false,sel:new Set(),
 var MATS=[['Karton 300 g',0.4],['Karton 350 g',0.5],['Mikrofala F',0.8],['Mikrofala E',1.5],['Mikrofala B',3],['Tektura szara 1 mm',1],['Tektura szara 1,5 mm',1.5],['Tektura szara 2 mm',2],['Tektura szara 3 mm',3]];
 try{var sm=JSON.parse(localStorage.getItem('wykr-mats')||'null');if(sm&&sm.length===MATS.length)MATS=sm;}catch(e){}
 var LBL={cut:'Cięcie',crease:'Bigowanie',vcut:'Rowek V',perf:'Perforacja',kiss:'Nacinanie',ignore:'Pomiń'};
-var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka',tab:'Wypustki'},BASE={S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
+var KIND={wall:'Ścianka',glue:'Klejenie',tuck:'Zakładka',dust:'Klapka boczna',tab:'Wypustki',snapF:'Dno: klapa z językiem',snapB:'Dno: klapa z wycięciem'},BASE={auto:'Automatycznie',S:'Szerokość pudełka',W:'Wysokość pudełka',G:'Głębokość pudełka',num:'Własny wymiar'};
+/* menu plusa: pozycja główna + druga lista z odmianami (rozwija się po najechaniu) */
+var MENU=[{k:'wall',l:'Ścianka'},
+  {k:'tuck',l:'Zakładka',sub:[{l:'Na tarcie',o:{lock:0}},{l:'Z zamkiem szczelinowym',o:{lock:10}}]},
+  {k:'dust',l:'Klapka boczna',sub:[{l:'Z barkiem',o:{shape:'shoulder'}},{l:'Z barkiem, odwrócona',o:{shape:'shoulder',flip:true}},{l:'Trapez',o:{shape:'trap'}}]},
+  {k:'glue',l:'Klejenie'},{k:'tab',l:'Wypustki',n:'bez bigu'},
+  {k:'snapF',l:'Dno zatrzaskowe',sub:[{l:'Klapa przednia z językiem',k:'snapF'},{l:'Klapa tylna z wycięciem',k:'snapB',o:{sink:{kt:1}}},{l:'Klapa boczna',k:'dust',o:{shape:'trap',sink:{kt:2},ext:{base:'G',mul:0.45,kt:0}}}]}];
 var DRAW={rect:1,ellipse:1,line:1,poly:1};
 var drag=null,space=false,raf=0,editing=false,shift=false;
 window.addEventListener('keydown',function(e){shift=e.shiftKey;},true);window.addEventListener('keyup',function(e){shift=e.shiftKey;},true);window.addEventListener('blur',function(){shift=false;});
@@ -65,7 +71,7 @@ function newBox(tpl){var P=S.box?S.box.P:{S:60,W:100,G:40,t:thk(),fold:$('fold')
 function exprOf(p,k){return k==='ext'?p.ext:p[k];}
 function jointBase(p){var par=panel(p.parent);if(par.parent==null)return (p.edge==='t'||p.edge==='b')?par.w.base:par.h.base;return p.edge==='o'?jointBase(par):par.ext.base;}
 function basesOf(p){return p.parent==null?[p.w.base,p.h.base]:[jointBase(p),p.ext.base];}
-function defExt(kind,par,at){if(kind==='tab')return {base:'num',val:3,kt:1};if(kind==='glue')return {base:'num',val:12,kt:0};if(kind==='tuck')return {base:'num',val:15,kt:0};if(kind==='dust')return {base:'G',mul:0.5,kt:0};
+function defExt(kind,par,at){if(kind==='tab')return {base:'num',val:3,kt:1};if(kind==='glue'||kind==='tuck')return {base:'auto',kt:0};if(kind==='dust')return {base:'G',mul:0.5,kt:0};if(kind==='snapF')return {base:'G',mul:0.4,kt:0};if(kind==='snapB')return {base:'G',mul:0.667,kt:0};
   /* nowa ścianka: najpierw wymiar sąsiada z tego samego rzędu, potem ten wymiar pudełka, którego brakuje ściance obok */
   if(at){var q=null;S.plus.forEach(function(x){if(x.id===at.id&&x.edge===at.edge)q=x;});
     if(q){var pos=q.x*Math.abs(q.nx)+q.y*Math.abs(q.ny),twin=null;
@@ -73,8 +79,8 @@ function defExt(kind,par,at){if(kind==='tab')return {base:'num',val:3,kt:1};if(k
       if(twin)return JSON.parse(JSON.stringify(twin.ext));}}
   var have=par?basesOf(par):[],miss=['S','W','G'].filter(function(b){return have.indexOf(b)<0;});
   return {base:miss.length===1?miss[0]:'G',kt:0};}
-function dimRow(p,k,label){var e=exprOf(p,k),v=e.base==='num'?e.val:S.box.P[e.base]*(e.mul||1);
-  return '<div class="f"><span class="f__label">'+label+'<span class="pv" id="pv-'+k+'"></span></span><div class="grid2"><select data-k="'+k+'" id="pb-'+k+'" aria-label="Skąd wymiar">'+Object.keys(BASE).map(function(b){return '<option value="'+b+'"'+(b===e.base?' selected':'')+'>'+BASE[b]+'</option>';}).join('')+
+function dimRow(p,k,label){var e=exprOf(p,k),v=e.base==='num'?e.val:e.base==='auto'?dimOf(p,k):S.box.P[e.base]*(e.mul||1);
+  return '<div class="f"><span class="f__label">'+label+'<span class="pv" id="pv-'+k+'"></span></span><div class="grid2"><select data-k="'+k+'" id="pb-'+k+'" aria-label="Skąd wymiar">'+Object.keys(BASE).filter(function(b){return b!=='auto'||p.kind==='tuck'||p.kind==='glue';}).map(function(b){return '<option value="'+b+'"'+(b===e.base?' selected':'')+'>'+BASE[b]+'</option>';}).join('')+
     '</select><input type="number" step="0.5" min="1" data-k="'+k+'" id="pn-'+k+'" value="'+(Math.round(v*100)/100)+'" aria-label="Wymiar mm"></div><div class="chips" data-k="'+k+'">'+[-2,-1,0,1,2].map(function(n){return '<button type="button" data-kt="'+n+'" aria-pressed="'+((e.kt||0)===n)+'">'+(n>0?'+':'')+(n?n+' × grubość':'bez poprawki')+'</button>';}).join('')+'</div></div>';}
 function renderPanelCard(){
   var box=$('pcard');if(!S.box)return;var p=S.ctx==='obj'&&S.selP!=null?panel(S.selP):null;
@@ -84,7 +90,11 @@ function renderPanelCard(){
   else{h+='<div class="f"><span class="f__label">Rodzaj</span><div class="chips" id="kinds">'+Object.keys(KIND).map(function(k){return '<button type="button" data-setkind="'+k+'" aria-pressed="'+(p.kind===k)+'">'+KIND[k]+'</button>';}).join('')+'</div></div>';
     h+=dimRow(p,'ext',p.kind==='wall'?'Wymiar ścianki':'Szerokość');
     if(p.kind==='wall'){var un=p.under||0;h+='<div class="f"><span class="f__label">Wolne boki pod wieczkiem</span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-under="'+n+'" aria-pressed="'+(un===n)+'">'+(n?n+(n>1?' warstwy':' warstwa'):'równo z bigiem')+'</button>';}).join('')+'</div><span class="f__hint">Obniża wolne boki tej ścianki, żeby wieczko leżało na nich płasko.</span></div>';}
-    if(p.kind==='tuck'){var lk=p.lock||0;h+='<div class="f"><span class="f__label">Zamek</span><div class="chips">'+[0,4,8].map(function(n){return '<button type="button" data-lock="'+n+'" aria-pressed="'+(lk===n)+'">'+(n?n+' mm':'brak')+'</button>';}).join('')+'</div><span class="f__hint">Nacięcia na końcach bigu, za które zaczepiają się klapki boczne.</span></div>';}
+    if(p.kind==='wall'){var nt=(p.notch||[]).slice().sort().join('');h+='<div class="f"><span class="f__label">Wycięcie na palec</span><div class="chips">'+[['','brak'],['a','bok 1'],['b','bok 2'],['ab','oba boki']].map(function(o){return '<button type="button" data-notch="'+o[0]+'" aria-pressed="'+(nt===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><span class="f__hint">Półokrągłe wycięcie na wolnej krawędzi, tam gdzie wchodzi zakładka.</span></div>';}
+    if(p.kind==='tuck'){var lk=p.lock||0,rd=p.rad!=null?p.rad:4;
+      h+='<div class="f"><span class="f__label">Zamknięcie</span><div class="chips">'+[[0,'na tarcie'],[4,'zamek 4 mm'],[8,'zamek 8 mm'],[10,'zamek 10 mm']].map(function(o){return '<button type="button" data-lock="'+o[0]+'" aria-pressed="'+(lk===o[0])+'">'+o[1]+'</button>';}).join('')+'</div><span class="f__hint">Zamek to nacięcia na końcach bigu, za które zaczepiają się klapki boczne.</span></div>';
+      h+='<div class="f"><span class="f__label">Promień rogów</span><div class="chips">'+[4,8,12].map(function(n){return '<button type="button" data-rad="'+n+'" aria-pressed="'+(rd===n)+'">'+n+' mm</button>';}).join('')+'</div></div>';}
+    if(p.kind==='dust'){var shp=p.shape||'trap';h+='<div class="f"><span class="f__label">Kształt</span><div class="chips"><button type="button" data-shape="shoulder" aria-pressed="'+(shp==='shoulder')+'">z barkiem</button><button type="button" data-shape="trap" aria-pressed="'+(shp==='trap')+'">trapez</button>'+(shp==='shoulder'?'<button type="button" data-flip="1" aria-pressed="'+(!!p.flip)+'">odwróć strony</button>':'')+'</div><span class="f__hint">Prosty bok klapki z barkiem ma być od strony wieczka.</span></div>';}
     if(p.kind!=='wall'&&p.kind!=='tab'){var gk=p.gap&&p.gap.kt!=null?p.gap.kt:1;h+='<div class="f"><span class="f__label">Odstęp od krawędzi<span class="pv">= '+n1(gk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2,3].map(function(n){return '<button type="button" data-gap="'+n+'" aria-pressed="'+(gk===n)+'">'+(n?n+' × grubość':'bez odstępu')+'</button>';}).join('')+'</div></div>';}
     if(p.kind!=='wall'&&p.kind!=='tab'){var sk=p.sink&&p.sink.kt!=null?p.sink.kt:(p.kind==='dust'?1:0);h+='<div class="f"><span class="f__label">Cofnięcie bigu<span class="pv">= '+n1(sk*S.box.P.t)+' mm</span></span><div class="chips">'+[0,1,2].map(function(n){return '<button type="button" data-sink="'+n+'" aria-pressed="'+(sk===n)+'">'+(n?n+' × grubość':'w linii ścianki')+'</button>';}).join('')+'</div><span class="f__hint">Dla klapki, która po złożeniu leży pod inną warstwą.</span></div>';}
     h+='<button class="btn is--danger" type="button" id="pDel">Usuń '+(p.kind==='wall'?'ściankę i wszystko za nią':'ten element')+'</button>';}
@@ -92,7 +102,7 @@ function renderPanelCard(){
 }
 function dimOf(p,k){var d=S.dims[p.id]||{};return d[k]||0;}
 function updatePv(){var p=S.selP!=null?panel(S.selP):null;if(!p)return;(p.parent==null?['w','h']:['ext']).forEach(function(k){var el=$('pv-'+k);if(!el)return;var e=exprOf(p,k),v=dimOf(p,k),P=S.box.P,t='';
-  if(e.base!=='num'){var raw=P[e.base]*(e.mul||1),kt=(e.kt||0)*P.t,fd=raw+kt-v;t=n1(raw)+(fd>0.001?' − '+n1(fd)+' zgięcia':'')+(kt?(kt>0?' + ':' − ')+n1(Math.abs(kt))+' poprawka':'')+' ';}
+  if(e.base!=='num'&&e.base!=='auto'){var raw=P[e.base]*(e.mul||1),kt=(e.kt||0)*P.t,fd=raw+kt-v;t=n1(raw)+(fd>0.001?' − '+n1(fd)+' zgięcia':'')+(kt?(kt>0?' + ':' − ')+n1(Math.abs(kt))+' poprawka':'')+' ';}
   el.textContent=t+'= '+n1(v)+' mm';});}
 function boxChanged(full){regen();refresh();if(full)renderPanelCard();else updatePv();}
 function startEdit(){if(!editing){editing=true;pushUndo();}}
@@ -103,7 +113,11 @@ $('pcard').addEventListener('input',function(e){var t=e.target;if(t.tagName!=='I
 $('pcard').addEventListener('change',function(e){var t=e.target;if(t.tagName!=='SELECT')return;var p=panel(S.selP);if(!p)return;pushUndo();var ex=exprOf(p,t.dataset.k);
   if(t.value==='num'){ex.val=Math.round(dimOf(p,t.dataset.k)*100)/100;ex.kt=0;}ex.base=t.value;delete ex.mul;boxChanged(true);});
 $('pcard').addEventListener('click',function(e){var p=S.selP!=null?panel(S.selP):null;if(!p)return;var b=e.target.closest('button');if(!b)return;
-  if(b.dataset.under!==undefined){pushUndo();p.under=+b.dataset.under;boxChanged(true);}
+  if(b.dataset.notch!==undefined){pushUndo();p.notch=b.dataset.notch.split('');boxChanged(true);}
+  else if(b.dataset.rad!==undefined){pushUndo();p.rad=+b.dataset.rad;boxChanged(true);}
+  else if(b.dataset.shape){pushUndo();p.shape=b.dataset.shape;boxChanged(true);}
+  else if(b.dataset.flip){pushUndo();p.flip=!p.flip;boxChanged(true);}
+  else if(b.dataset.under!==undefined){pushUndo();p.under=+b.dataset.under;boxChanged(true);}
   else if(b.dataset.lock!==undefined){pushUndo();p.lock=+b.dataset.lock;boxChanged(true);}
   else if(b.dataset.sink!==undefined){pushUndo();p.sink={kt:+b.dataset.sink};boxChanged(true);}
   else if(b.dataset.gap!==undefined){pushUndo();p.gap={kt:+b.dataset.gap};boxChanged(true);}
@@ -116,8 +130,13 @@ function delPanel(){var p=S.selP!=null?panel(S.selP):null;if(!p){toast('Najpierw
   pushUndo();removeKids(p.id);S.box.panels=S.box.panels.filter(function(q){return q.id!==p.id;});S.selP=null;boxChanged(true);}
 var menuAt=null,menu=$('menu');
 function closeMenu(){menu.style.display='none';menuAt=null;}
-menu.addEventListener('click',function(e){var b=e.target.closest('[data-kind]');if(!b||!menuAt)return;pushUndo();var id=1;S.box.panels.forEach(function(q){id=Math.max(id,q.id+1);});
-  S.box.panels.push({id:id,kind:b.dataset.kind,parent:menuAt.id,edge:menuAt.edge,ext:defExt(b.dataset.kind,panel(menuAt.id),menuAt)});S.selP=id;closeMenu();boxChanged(true);});
+menu.innerHTML='<span class="menu__label">Dodaj przy tej krawędzi</span>'+MENU.map(function(it,i){return '<div class="menu__item"><button type="button" data-mi="'+i+'">'+it.l+(it.sub?'<small>›</small>':it.n?'<small>'+it.n+'</small>':'')+'</button>'+
+  (it.sub?'<div class="menu__sub"><span class="menu__label">'+it.l+'</span>'+it.sub.map(function(sb,j){return '<button type="button" data-mi="'+i+'" data-si="'+j+'">'+sb.l+'</button>';}).join('')+'</div>':'')+'</div>';}).join('');
+menu.addEventListener('click',function(e){var b=e.target.closest('[data-mi]');if(!b||!menuAt)return;var it=MENU[+b.dataset.mi],sb=it.sub?it.sub[b.dataset.si!==undefined?+b.dataset.si:0]:null,kind=(sb&&sb.k)||it.k,o=(sb&&sb.o)||{};
+  pushUndo();var id=1;S.box.panels.forEach(function(q){id=Math.max(id,q.id+1);});
+  var np={id:id,kind:kind,parent:menuAt.id,edge:menuAt.edge,ext:o.ext?JSON.parse(JSON.stringify(o.ext)):defExt(kind,panel(menuAt.id),menuAt)};
+  Object.keys(o).forEach(function(k){if(k!=='ext')np[k]=JSON.parse(JSON.stringify(o[k]));});
+  S.box.panels.push(np);S.selP=id;closeMenu();boxChanged(true);});
 window.addEventListener('pointerdown',function(e){if(menuAt&&!e.target.closest('#menu')&&!e.target.closest('[data-plus]'))closeMenu();},true);
 ['bS','bW','bG'].forEach(function(id){$(id).addEventListener('input',function(){var v=parseFloat($(id).value);if(!(v>=1)||!S.box)return;startEdit();var key=id.charAt(1),old=S.box.P[key];
   if((shift||$('bLock').checked)&&old>0){var f=v/old;['S','W','G'].forEach(function(k){if(k!==key)S.box.P[k]=Math.max(1,Math.round(S.box.P[k]*f*10)/10);});syncBox();}
@@ -383,7 +402,7 @@ svg.addEventListener('pointerdown',function(e){
   if(S.tool==='measure'){var p=snap(w);if(!S.meas||S.meas.b)S.meas={a:p,b:null,h:p};else S.meas.b=p;render();return;}
   if(DRAW[S.tool]){var a=S.tool==='line'?snap(w):w;drag={k:'draw',a:a,b:a,e:{shiftKey:e.shiftKey,altKey:e.altKey},shape:null};return;}
   var pl=S.ctx==='obj'&&t.closest&&t.closest('[data-plus]');
-  if(pl){var a0=pl.dataset.plus.split(':');menuAt={id:+a0[0],edge:a0[1]};menu.style.display='grid';menu.style.left=Math.min(e.clientX+8,window.innerWidth-220)+'px';menu.style.top=Math.min(e.clientY+8,window.innerHeight-190)+'px';return;}
+  if(pl){var a0=pl.dataset.plus.split(':');menuAt={id:+a0[0],edge:a0[1]};menu.style.display='grid';menu.classList.toggle('is--left',e.clientX>window.innerWidth-470);menu.style.left=Math.min(e.clientX+8,window.innerWidth-230)+'px';menu.style.top=Math.max(8,Math.min(e.clientY+8,window.innerHeight-280))+'px';return;}
   if(S.ctx==='nodes'){var hk=t.dataset&&t.dataset.h;if(hk){drag={k:'hmove',h:hk,moved:false};return;}
     var k=t.dataset&&t.dataset.n;
     if(k){if(e.shiftKey){if(S.nsel.has(k))S.nsel.delete(k);else S.nsel.add(k);}else if(!S.nsel.has(k)){S.nsel.clear();S.nsel.add(k);}

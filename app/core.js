@@ -412,7 +412,7 @@ function scaleAxis(paths,ax,lo,k){
    Zgięcie ma zawias na głębokości P.h od zewnętrznej powierzchni: bigowanie = połowa grubości, rowek V od środka = 0, nacięcie od zewnątrz = cała grubość.
    Każdy koniec ścianki, który jest zgięciem, zabiera P.h; nf = liczba takich końców (0–2). Własny wymiar jest brany dosłownie. */
 var FOLD={crease:0.5,vin:0,vout:1};
-function exprVal(e,P,nf){var v=e.base==='num'?e.val+(e.kt||0)*P.t:P[e.base]*(e.mul||1)-(nf||0)*(P.h||0)+(e.kt||0)*P.t;return Math.max(1,v);}
+function exprVal(e,P,nf){if(e.base==='auto')return 1;var v=e.base==='num'?e.val+(e.kt||0)*P.t:P[e.base]*(e.mul||1)-(nf||0)*(P.h||0)+(e.kt||0)*P.t;return Math.max(1,v);}
 function boxTemplate(name){
   var n=1,ps=[],W=function(par,edge,base,kt,more){var p={id:n++,kind:'wall',parent:par,edge:edge,ext:{base:base,kt:kt}};if(more)for(var k in more)p[k]=more[k];ps.push(p);return p.id;},
     F=function(par,edge,kind){var e=kind==='glue'?{base:'num',val:12,kt:0}:kind==='tuck'?{base:'num',val:15,kt:0}:{base:'G',mul:0.5,kt:0};ps.push({id:n++,kind:kind,parent:par,edge:edge,ext:e});};
@@ -433,12 +433,23 @@ function boxTemplate(name){
     ['l','r'].forEach(function(e){var o=W(1,e,'W',0),sp=n;ps.push({id:n++,kind:'wall',parent:o,edge:'o',ext:{base:'num',val:0,kt:2}});
       var inn=W(sp,'o','W',-2);ps.push({id:n++,kind:'tab',parent:inn,edge:'o',ext:{base:'num',val:3,kt:1}});});
   }else{
-    /* ścianka z klejeniem i wieczka z zakładką są krótsze o 1 × grubość: klapka klejowa i zakładka chowają się POD sąsiednią ściankę.
-       tylna ścianka ma wolne boki obniżone pod wieczko (under:1) */
+    /* pudełko z zakładkami. Korpus: przód (1), bok, tył, bok z klejeniem — bok z klejeniem i wieczka są krótsze o 1 × grubość,
+       bo klapka klejowa i zakładka chowają się POD sąsiednią ściankę. Warianty: tuck = zakładki proste (obie na przodzie),
+       tuckR = odwrócone (góra na przodzie, dół na tyle), snap = góra z zakładką + dno zatrzaskowe 1-2-3 */
     root('S','W');
-    var s1=W(1,'r','G',0),bk=W(s1,'o','S',0,{under:1}),s2=W(bk,'o','G',-1);F(s2,'o','glue');
-    var lid=W(1,'t','G',-1);F(lid,'o','tuck');var bot=W(1,'b','G',-1);F(bot,'o','tuck');
-    F(s1,'a','dust');F(s1,'b','dust');F(s2,'a','dust');F(s2,'b','dust');
+    var s1=W(1,'r','G',0),bk=W(s1,'o','S',0),s2=W(bk,'o','G',-1);ps.push({id:n++,kind:'glue',parent:s2,edge:'o',ext:{base:'auto',kt:0}});
+    var T=function(par,edge){var l=W(par,edge,'G',-1);ps.push({id:n++,kind:'tuck',parent:l,edge:'o',ext:{base:'auto',kt:0}});},
+        D=function(par,edge,flip){ps.push({id:n++,kind:'dust',parent:par,edge:edge,ext:{base:'G',mul:0.5,kt:0},shape:'shoulder',flip:!!flip});},
+        get=function(id){return ps.filter(function(q){return q.id===id;})[0];};
+    T(1,'t');D(s1,'a',false);D(s2,'a',true);
+    if(name==='tuckR'){T(bk,'b');D(s1,'b',true);D(s2,'b',false);get(bk).underE={a:1};get(bk).notch=['a'];get(1).underE={b:1};get(1).notch=['b'];}
+    else if(name==='snap'){
+      /* dno 1-2-3: klapy boczne zaginają się pierwsze (big cofnięty o 2 grubości), potem tylna z półokrągłym wycięciem (o 1), na końcu przednia z językiem */
+      ps.push({id:n++,kind:'snapF',parent:1,edge:'b',ext:{base:'G',mul:0.4,kt:0}});
+      ps.push({id:n++,kind:'snapB',parent:bk,edge:'b',ext:{base:'G',mul:0.667,kt:0},sink:{kt:1}});
+      [s1,s2].forEach(function(w){ps.push({id:n++,kind:'dust',parent:w,edge:'b',ext:{base:'G',mul:0.45,kt:0},shape:'trap',sink:{kt:2}});});
+      get(bk).underE={a:1};get(bk).notch=['a'];
+    }else{T(1,'b');D(s1,'b',false);D(s2,'b',true);get(bk).underE={a:1,b:1};get(bk).notch=['a','b'];}
   }
   return ps;
 }
@@ -464,11 +475,28 @@ function buildBox(box){
   var foldType={crease:'crease',vin:'vcut',vout:'kiss'}[P.fold]||'crease';
   /* każdy punkt dostaje stały klucz (ścianka/krawędź/kolejność) — po nim trzymają się ręczne przesunięcia punktów */
   function emit(type,pts,key,list){var fold=type==='crease';if(fold)type=foldType;pts.forEach(function(q,i){q.k=key+'#'+i;});(list||out.paths).push({type:type,src:fold?'#0000ff':'#ff0000',closed:false,pts:pts,fold:fold});}
-  function under(p){return p.kind==='wall'&&p.under?Math.max(0,p.under*P.t-P.h):0;}
+  /* wolna krawędź: może być obniżona pod wieczko (underE / under) i mieć półokrągłe wycięcie na palec (notch) */
+  function insetOf(p,key){if(p.kind!=='wall')return 0;var n=p.underE&&p.underE[key]!=null?p.underE[key]:((key==='a'||key==='b')?(p.under||0):0);return n?Math.max(0,n*P.t-P.h):0;}
+  function freeEdge(p,key,F,r0,r1){
+    var a0=r0||0,a1=r1==null?F.len:r1,i=Math.min(insetOf(p,key),F.len*0.3),pts=[pt(F,a0,0)],c;
+    if(i>0.001)pts.push(pt(F,a0,-i));
+    if(p.notch&&p.notch.indexOf(key)>=0&&a1-a0>12){var m=(a0+a1)/2,r=Math.min(8,(a1-a0)*0.2),k=0.5523*r,b=-i,P1=pt(F,m,b-r),P2=pt(F,m+r,b);
+      pts.push(pt(F,m-r,b));
+      c=[pt(F,m-r,b-k),pt(F,m-k,b-r)];pts.push({x:P1.x,y:P1.y,c1x:c[0].x,c1y:c[0].y,c2x:c[1].x,c2y:c[1].y});
+      c=[pt(F,m+k,b-r),pt(F,m+r,b-k)];pts.push({x:P2.x,y:P2.y,c1x:c[0].x,c1y:c[0].y,c2x:c[1].x,c2y:c[1].y});}
+    if(i>0.001)pts.push(pt(F,a1,-i));
+    pts.push(pt(F,a1,0));emit('cut',pts,p.id+'/'+key+'/x');plus(p,key,F);
+  }
+  /* długości dobierane same: zakładka z tabeli wg szerokości pudełka, klejenie 10–16 mm wg długości krawędzi */
+  function autoExt(p,F){
+    if(p.kind==='tuck'){var w=(out.dims[p.parent]&&out.dims[p.parent].ext)||F.len;return w<16?Math.max(5,w*0.5):w<20?10:w<24?13:w<38?16:w<57?20:w<108?22:25;}
+    if(p.kind==='glue')return F.len<60?10:F.len<120?13:16;
+    return 12;
+  }
   function plus(p,key,F){var m=pt(F,F.len/2,0);out.plus.push({id:p.id,edge:key,x:m.x,y:m.y,nx:F.n.x,ny:F.n.y});}
-  function edge(p,key,F){
+  function edge(p,key,F,r0,r1){
     var ch=kids[p.id+':'+key],base=p.id+'/'+key;
-    if(!ch){emit('cut',[pt(F,0,0),pt(F,F.len,0)],base+'/x');plus(p,key,F);return;}
+    if(!ch){freeEdge(p,key,F,r0,r1);return;}
     if(ch.kind==='tab'){place(ch,F,0);return;}
     /* klapki odsuwają się od krawędzi o wielokrotność grubości; klapka leżąca pod inną warstwą ma big cofnięty w głąb ścianki */
     var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
@@ -484,18 +512,16 @@ function buildBox(box){
     place(ch,sk>0.001?{O:pt(F,0,-sk),u:F.u,n:F.n,len:F.len}:F,ins);
   }
   function place(p,F,ins){
-    var ext=exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']&&kids[p.id+':o'].kind!=='tab'?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0),q=function(a,b){return pt(F,a,b);};out.dims[p.id]={ext:ext};
+    var ext=p.ext.base==='auto'?Math.max(1,autoExt(p,F)+(p.ext.kt||0)*P.t):exprVal(p.ext,P,p.kind==='wall'?1+(kids[p.id+':o']&&kids[p.id+':o'].kind!=='tab'?1:0):0),len=F.len,c,L0=ins||0,L1=len-(ins||0),q=function(a,b){return pt(F,a,b);};out.dims[p.id]={ext:ext};
     if(p.kind==='wall'){
       fr[p.id]=F;
       out.frames[p.id]={nx:F.n.x,ny:F.n.y,pos:F.O.x*Math.abs(F.n.x)+F.O.y*Math.abs(F.n.y)};
       out.polys[p.id]=[q(0,0),q(0,ext),q(len,ext),q(len,0)];
       var ce=q(len/2,ext/2);out.labels.push({id:p.id,x:ce.x,y:ce.y,a:len,b:ext});
-      /* wolny bok obniżony pod wieczko: krawędź cofa się w głąb ścianki */
-      var da=kids[p.id+':a']?0:Math.min(under(p),len*0.3),db=kids[p.id+':b']?0:Math.min(under(p),len*0.3);
-      var Fa={O:q(0,0),u:F.n,n:{x:-F.u.x,y:-F.u.y},len:ext},Fb={O:q(len,0),u:F.n,n:F.u,len:ext},Fo={O:q(0,ext),u:F.u,n:F.n,len:len};
-      if(da>0.001){emit('cut',[q(0,0),q(da,0),q(da,ext),q(0,ext)],p.id+'/a/x');plus(p,'a',Fa);}else edge(p,'a',Fa);
-      if(!kids[p.id+':o']&&(da>0.001||db>0.001)){emit('cut',[q(da,ext),q(len-db,ext)],p.id+'/o/x');plus(p,'o',Fo);}else edge(p,'o',Fo);
-      if(db>0.001){emit('cut',[q(len,0),q(len-db,0),q(len-db,ext),q(len,ext)],p.id+'/b/x');plus(p,'b',Fb);}else edge(p,'b',Fb);
+      var da=kids[p.id+':a']?0:Math.min(insetOf(p,'a'),len*0.3),db=kids[p.id+':b']?0:Math.min(insetOf(p,'b'),len*0.3);
+      edge(p,'a',{O:q(0,0),u:F.n,n:{x:-F.u.x,y:-F.u.y},len:ext});
+      edge(p,'o',{O:q(0,ext),u:F.u,n:F.n,len:len},da,len-db);
+      edge(p,'b',{O:q(len,0),u:F.n,n:F.u,len:ext});
     }else if(p.kind==='tab'){
       /* wypustki: przedłużenie ścianki bez bigu. Jeśli ścianka jest zawinięciem boku (bok → grzbiet → ścianka wewnętrzna), w dnie powstają szczeliny */
       var tw=Math.min(25,len*0.2),cs=[len*0.25,len*0.75],tp=[q(0,0)];
@@ -505,11 +531,26 @@ function buildBox(box){
       if(outer&&outer.kind==='wall'&&spn.edge==='o'&&inn.edge==='o'&&p.edge==='o'&&fr[outer.id]&&out.dims[spn.id]){var Fo=fr[outer.id],sd=out.dims[spn.id].ext,hw=(P.t+0.5)/2;
         cs.forEach(function(cx,ci){var a0=cx-tw/2-0.5,a1=cx+tw/2+0.5;slits.push({type:'cut',src:'#ff0000',closed:true,fold:false,pts:[pt(Fo,a0,-sd-hw),pt(Fo,a1,-sd-hw),pt(Fo,a1,-sd+hw),pt(Fo,a0,-sd+hw)].map(function(v,vi){v.k=p.id+'/slot'+ci+'#'+vi;return v;})});});}
     }else if(p.kind==='tuck'){
-      var r=Math.min(ext*0.6,(L1-L0)*0.25),k=0.5523*r,A=q(L0+r,ext),B=q(L1,ext-r),a1=q(L0,ext-r+k),a2=q(L0+r-k,ext),b1=q(L1-r+k,ext),b2=q(L1,ext-r+k);
+      var r=Math.min(p.rad!=null?p.rad:4,ext*0.9,(L1-L0)*0.25),k=0.5523*r,A=q(L0+r,ext),B=q(L1,ext-r),a1=q(L0,ext-r+k),a2=q(L0+r-k,ext),b1=q(L1-r+k,ext),b2=q(L1,ext-r+k);
       emit('cut',[q(L0,0),q(L0,ext-r),{x:A.x,y:A.y,c1x:a1.x,c1y:a1.y,c2x:a2.x,c2y:a2.y},q(L1-r,ext),{x:B.x,y:B.y,c1x:b1.x,c1y:b1.y,c2x:b2.x,c2y:b2.y},q(L1,0)],p.id+'/out');
       out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
+    }else if(p.kind==='snapB'||p.kind==='snapF'){
+      /* dno zatrzaskowe: klapa tylna ma półokrągłe wycięcie, klapa przednia język, który wchodzi pod krawędź tylnej */
+      var sp=L1-L0,m=(L0+L1)/2,cc=Math.min(ext*0.2,sp*0.1),tw=sp*0.4,o=[q(L0,0),q(L0,ext-cc),q(L0+cc,ext)],cv=function(e,c1,c2){return {x:e.x,y:e.y,c1x:c1.x,c1y:c1.y,c2x:c2.x,c2y:c2.y};};
+      if(p.kind==='snapB'){var nw=tw/2+1,nd=Math.min(nw,ext*0.3),kx=0.5523*nw,ky=0.5523*nd;
+        o.push(q(m-nw,ext),cv(q(m,ext-nd),q(m-nw,ext-ky),q(m-kx,ext-nd)),cv(q(m+nw,ext),q(m+kx,ext-nd),q(m+nw,ext-ky)));}
+      else{var tl=p.tongue!=null?p.tongue:Math.min(10,sp*0.15),rt=Math.min(3,tl*0.5,tw*0.25),kt2=0.5523*rt,x0=m-tw/2,x1=m+tw/2,ye=ext+tl;
+        o.push(q(x0,ext),q(x0,ye-rt),cv(q(x0+rt,ye),q(x0,ye-rt+kt2),q(x0+rt-kt2,ye)),q(x1-rt,ye),cv(q(x1,ye-rt),q(x1-rt+kt2,ye),q(x1,ye-rt+kt2)),q(x1,ext));}
+      o.push(q(L1-cc,ext),q(L1,ext-cc),q(L1,0));emit('cut',o,p.id+'/out');out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
+    }else if(p.kind==='dust'&&p.shape==='shoulder'&&L1-L0>ext*0.9){
+      /* klapka z barkiem: od strony wieczka małe podcięcie i prawie prosty bok, z drugiej zaokrąglony róg, skos i bark przy bigu; flip zamienia strony */
+      var sp2=L1-L0,c1=Math.min(2,ext*0.1,sp2*0.05),lean=ext*0.04,sh=Math.min(6,ext*0.3),ch2=Math.min(2,sh*0.5),tp=Math.min(ext*0.25,sp2*0.2),rr=Math.min(ext*0.25,sp2*0.15);
+      var Af=function(a){return p.flip?L0+L1-a:a;},g=function(a,b){return q(Af(a),b);},Tx=L1-ch2-tp,dx=tp,dy=sh+ch2-ext,dl=Math.hypot(dx,dy),T2=g(Tx+dx/dl*rr,ext+dy/dl*rr),t1=g(Tx-rr*0.45,ext),t2=g(Tx+dx/dl*rr*0.45,ext+dy/dl*rr*0.45);
+      emit('cut',[g(L0,0),g(L0+c1,c1),g(L0+c1+lean,ext),g(Tx-rr,ext),{x:T2.x,y:T2.y,c1x:t1.x,c1y:t1.y,c2x:t2.x,c2y:t2.y},g(L1-ch2,sh+ch2),g(L1,sh),g(L1,0)],p.id+'/out');
+      out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
     }else{
-      c=Math.min(ext*(p.kind==='glue'?0.5:0.3),(L1-L0)*0.25);
+      /* klejenie: końce ścięte pod 15°; klapka-trapez: pod ok. 17° */
+      c=Math.min(ext*(p.kind==='glue'?0.268:0.3),(L1-L0)*0.25);
       var pl=[q(L0,0),q(L0+c,ext),q(L1-c,ext),q(L1,0)];emit('cut',pl.map(function(v){return {x:v.x,y:v.y};}),p.id+'/out');out.polys[p.id]=pl;
     }
   }
