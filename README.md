@@ -28,3 +28,8 @@ porównuje swój numer z `version.json` i pokazuje pasek „Jest nowa wersja”.
 Workflow wymaga ustawienia Settings → Pages → Source: **GitHub Actions**.
 
 Testy lokalnie: `cd tests && npm install && npm test`.
+
+
+## Biblioteki
+
+- `app/vendor/clipper.js` — Clipper 6.4.2 (Angus Johnson, port JS: Timo), licencja Boost 1.0. Służy do liczenia obrysu pudełka jako sumy i różnicy wielokątów.

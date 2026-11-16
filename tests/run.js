@@ -109,13 +109,48 @@ ok('DXF, PDF i SVG: zapis i odczyt', () => {
   assert.strictEqual(ps.length, 2); assert.ok(Math.abs(C.bboxOf([ps[1]]).w - 20) < 0.01);
 });
 
+ok('rogi liczone z geometrii: jeden obrys, bez wąsów, mikroodcinków i powtórzonych punktów — każda para sąsiadów, bez sprzątania', () => {
+  let n2 = 0;
+  for (const tpl of ['tuck', 'tuckR', 'snap', 'mailer', 'tray', 'sleeve']) for (const tt of [0.3, 1.5, 3]) for (const fold of ['crease', 'vin', 'vout'])
+    for (const gap of [null, 1, 2]) for (const sink of [null, 0, 1, 2]) for (const lock of [0, 4]) for (const shape of ['', 'round', 'trap']) {
+      const b = { P: { S: 60, W: 100, G: 40, t: tt, fold }, panels: C.boxTemplate(tpl) };
+      b.panels.forEach(p => { if (p.kind === 'wall' || p.kind === 'tab') return; if (gap != null) p.gap = { kt: gap }; if (sink != null) p.sink = { kt: sink }; if (lock && p.kind === 'tuck') p.lock = lock; if (shape && p.kind === 'dust') p.shape = shape; });
+      const r = C.buildBox(b), id = [tpl, tt, fold, gap, sink, lock, shape].join('/'); n2++;
+      assert.strictEqual(r.method, 'union', id + ' ' + r.unionError);
+      const rings = r.paths.filter(p => p.type === 'cut' && p.closed); assert.ok(rings.length >= 1, id);
+      rings.forEach(p => { const a = p.pts, n = a.length, seen = new Set();
+        for (let i = 0; i < n; i++) { const pv = a[(i - 1 + n) % n], q = a[i], nx = a[(i + 1) % n], k = Math.round(q.x * 1000) + ',' + Math.round(q.y * 1000);
+          assert.ok(!seen.has(k), id + ' powtórzony punkt ' + k); seen.add(k);
+          assert.ok(Math.hypot(nx.x - q.x, nx.y - q.y) > 0.02, id + ' mikroodcinek przy ' + k);
+          if (q.c1x !== undefined || nx.c1x !== undefined) continue;
+          const ax = q.x - pv.x, ay = q.y - pv.y, bx = nx.x - q.x, by = nx.y - q.y, la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+          assert.ok(!(Math.abs(ax * by - ay * bx) < 1e-6 * la * lb && ax * bx + ay * by < 0), id + ' wąs przy ' + k); } });
+      // bigi leżą w materiale: środek każdego bigu jest wewnątrz największego obrysu
+      const flat = C.flattenPath(rings[0], 0.02);
+      r.paths.filter(p => p.fold).forEach(f => { const m = { x: (f.pts[0].x + f.pts[1].x) / 2, y: (f.pts[0].y + f.pts[1].y) / 2 }; assert.ok(C.pointInPoly(flat, m.x, m.y), id + ' big poza materiałem'); });
+    }
+  assert.ok(n2 > 3000);
+});
+ok('części stykające się bez odstępu zostają rozdzielone linią cięcia', () => {
+  const b = { P: { S: 60, W: 100, G: 40, t: 0.4, fold: 'crease' }, panels: C.boxTemplate('tuck') }; b.panels.forEach(p => { if (p.kind === 'dust') p.gap = { kt: 0 }; });
+  const r = C.buildBox(b), inner = r.paths.filter(p => p.type === 'cut' && !p.closed);
+  assert.ok(inner.length >= 2, 'brak cięć wewnętrznych: ' + inner.length); assert.strictEqual(C.buildBox({ P: b.P, panels: C.boxTemplate('tuck') }).paths.filter(p => p.type === 'cut' && !p.closed).length, 0);
+});
+ok('nowy obrys zgadza się ze starym tam, gdzie stary był poprawny (szablony bez zmian)', () => {
+  const len = r => r.paths.filter(p => p.type === 'cut' && p.closed).reduce((s, p) => s + C.pathLength(p), 0);
+  for (const tpl of ['tuck', 'tuckR', 'snap', 'mailer', 'tray', 'sleeve', 'one']) for (const tt of [0.4, 2]) for (const fold of ['crease', 'vin', 'vout']) {
+    const mk = legacy => C.buildBox({ P: { S: 60, W: 100, G: 40, t: tt, fold }, panels: C.boxTemplate(tpl), legacy });
+    assert.ok(Math.abs(len(mk(false)) - len(mk(true))) < 0.01, tpl + '/' + tt + '/' + fold);
+  }
+});
 // ---- interfejs
 const { JSDOM, VirtualConsole } = require('jsdom');
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<link[^>]*>/g, '')
-  .replace(/<script src="(app\/[a-z.]+)(\?v=[^"]*)?"><\/script>/g, (m, f) => '<script>' + fs.readFileSync(path.join(root, f), 'utf8') + '</script>');
+  .replace(/<script src="(app\/[a-z.\/]+)(\?v=[^"]*)?"><\/script>/g, (m, f) => '<script>' + fs.readFileSync(path.join(root, f), 'utf8') + '</script>');
 const errors = [], vc = new VirtualConsole(); vc.on('jsdomError', e => errors.push(e.message + ' ' + ((e.detail && e.detail.stack) || '').split('\n').slice(0, 3).join(' | ')));
 const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc, url: 'https://example.test/' });
 const w = dom.window, d = w.document, g = id => d.getElementById(id), cv = g('cv');
+assert.ok(w.ClipperLib, 'biblioteka do sumowania wielokątów nie wczytała się w przeglądarce');
 const ev = (el, t) => el.dispatchEvent(new w.Event(t, { bubbles: true }));
 const pe = (el, t, x, y, o) => el.dispatchEvent(new w.MouseEvent(t, Object.assign({ bubbles: true, button: 0, clientX: x, clientY: y }, o || {})));
 const key = (k, o) => w.dispatchEvent(new w.KeyboardEvent('keydown', Object.assign({ key: k, bubbles: true }, o || {})));
