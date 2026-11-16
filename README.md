@@ -1,4 +1,4 @@
-# KHOREI — wykrojnik
+# Kreator wykrojników
 
 Narzędzie w przeglądarce do budowania wykrojników pudełek, poprawiania plików i układania impozycji pod ploter SINAJET DF1007-MT.
 

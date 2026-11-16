@@ -445,19 +445,19 @@ function boxTemplate(name){
   function root(a,b){ps.push({id:n++,kind:'wall',parent:null,w:{base:a,kt:0},h:{base:b,kt:0}});}
   if(name==='tray'){
     root('S','G');var t=W(1,'t','W',0),b=W(1,'b','W',0);W(1,'l','W',0);W(1,'r','W',0);
-    F(t,'a','glue');F(t,'b','glue');F(b,'a','glue');F(b,'b','glue');
+    F(t,'a','glue');F(t,'b','glue');F(b,'a','glue');F(b,'b','glue');ps.forEach(function(q){if(q.kind==='glue')q.sink={kt:1};});
   }else if(name==='one'){root('S','W');
   }else if(name==='sleeve'){
     root('S','W');var a1=W(1,'r','G',0),a2=W(a1,'o','S',0),a3=W(a2,'o','G',-1);F(a3,'o','glue');
   }else if(name==='mailer'){
     /* pudełko wysyłkowe (układ FEFCO 0427): dno, tył z wieczkiem i klapą, przód, boki zawijane podwójnie z wypustkami w szczelinach dna;
        uszy przodu, tyłu i wieczka chowają się w zawinięciu boków */
-    root('S','G');var bk2=W(1,'t','W',0),lid2=W(bk2,'o','G',0),fr=W(1,'b','W',0);
+    root('S','G');var bk2=W(1,'t','W',0),lid2=W(bk2,'o','G',-1),fr=W(1,'b','W',0);
     W(lid2,'o','W',-1);
     var ear=function(par,edge,base,mul){ps.push({id:n++,kind:'dust',parent:par,edge:edge,ext:{base:base,mul:mul,kt:0},sink:{kt:0}});};
     ear(bk2,'a','G',0.45);ear(bk2,'b','G',0.45);ear(fr,'a','G',0.45);ear(fr,'b','G',0.45);ear(lid2,'a','W',0.8);ear(lid2,'b','W',0.8);
     ['l','r'].forEach(function(e){var o=W(1,e,'W',0),sp=n;ps.push({id:n++,kind:'wall',parent:o,edge:'o',ext:{base:'num',val:0,kt:2}});
-      var inn=W(sp,'o','W',-2);ps.push({id:n++,kind:'tab',parent:inn,edge:'o',ext:{base:'num',val:3,kt:1}});});
+      var inn=W(sp,'o','W',-1);ps.push({id:n++,kind:'tab',parent:inn,edge:'o',ext:{base:'num',val:0,kt:1}});});
   }else{
     /* pudełko z zakładkami. Korpus: przód (1), bok, tył, bok z klejeniem — bok z klejeniem i wieczka są krótsze o 1 × grubość,
        bo klapka klejowa i zakładka chowają się POD sąsiednią ściankę. Warianty: tuck = zakładki proste (obie na przodzie),
@@ -589,7 +589,14 @@ function buildBox(box){
       var pl=[q(L0,0),q(L0+c,ext),q(L1-c,ext),q(L1,0)];emit('cut',pl.map(function(v){return {x:v.x,y:v.y};}),p.id+'/out');out.polys[p.id]=pl;
     }
   }
-  var w=exprVal(root.w,P,(kids[root.id+':l']?1:0)+(kids[root.id+':r']?1:0)),h=exprVal(root.h,P,(kids[root.id+':t']?1:0)+(kids[root.id+':b']?1:0));out.dims[root.id]={w:w,h:h};
+  /* Linie zgięć liczę dla całego rzędu, nie tylko dla pierwszej ścianki: jeśli KTÓRAKOLWIEK ścianka w pasie ma u góry (albo u dołu) coś, co się zagina,
+     to linia bigu całego pasa leży o h od zewnętrznej powierzchni. Inaczej w pudełku z odwróconymi zakładkami tylne wieczko miałoby big o h za nisko. */
+  function foldAt(k1,k2,ownKey,chKey){
+    var c=kids[root.id+':'+ownKey];if(c&&c.kind!=='tab')return 1;
+    var hit=0;[k1,k2].forEach(function(k){var m=kids[root.id+':'+k];while(m&&m.kind==='wall'){var x=kids[m.id+':'+chKey];if(x&&x.kind!=='tab')hit=1;m=kids[m.id+':o'];}});
+    return hit;
+  }
+  var w=exprVal(root.w,P,foldAt('t','b','l','a')+foldAt('t','b','r','b')),h=exprVal(root.h,P,foldAt('l','r','t','a')+foldAt('l','r','b','b'));out.dims[root.id]={w:w,h:h};
   out.polys[root.id]=[{x:0,y:0},{x:w,y:0},{x:w,y:h},{x:0,y:h}];out.labels.push({id:root.id,x:w/2,y:h/2,a:w,b:h});
   edge(root,'t',{O:{x:0,y:0},u:{x:1,y:0},n:{x:0,y:-1},len:w});
   edge(root,'b',{O:{x:0,y:h},u:{x:1,y:0},n:{x:0,y:1},len:w});

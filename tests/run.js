@@ -13,6 +13,18 @@ ok('szablony dają jeden zamknięty obrys i nie kolidują', () => {
     assert.strictEqual(Object.keys(r.clash).length, 0, t + ' kolizja');
   }
 });
+ok('linie zgięć: cały rząd ścianek trzyma jedną linię, także gdy wieczko jest na innej ściance', () => {
+  // big tradycyjny: linia zgięcia leży w połowie grubości, więc odległość big–big = wymiar zewnętrzny − grubość
+  const mk = (tpl, fold) => { const b = { P: { S: 60, W: 100, G: 40, t: 2, fold }, panels: C.boxTemplate(tpl) }; return { b, r: C.buildBox(b) }; };
+  [['crease', 98, 58, 36], ['vin', 100, 60, 38], ['vout', 96, 56, 34]].forEach(([fold, H, back, lid]) => {
+    ['tuck', 'tuckR', 'snap'].forEach(t => { const { b, r } = mk(t, fold); const walls = b.panels.filter(p => p.kind === 'wall');
+      assert.strictEqual(r.dims[1].h, H, t + '/' + fold + ' wysokość korpusu między bigami');
+      assert.strictEqual(r.dims[walls[2].id].ext, back, t + '/' + fold + ' tył');
+      walls.filter(p => p.ext && p.ext.base === 'G' && p.ext.kt === -1 && p.edge !== 'o').forEach(p => assert.strictEqual(r.dims[p.id].ext, lid, t + '/' + fold + ' wieczko')); });
+  });
+  const tr = mk('tray', 'crease'); assert.strictEqual(tr.r.dims[1].w + 'x' + tr.r.dims[1].h, '58x38'); assert.strictEqual(tr.r.dims[2].ext, 99);
+  const ml = mk('mailer', 'crease'); const mw = ml.b.panels; assert.strictEqual(ml.r.dims[3].ext, 36, 'wieczko pudełka wysyłkowego'); assert.strictEqual(ml.r.dims[mw.find(p => p.kind === 'tab').id].ext, 2, 'wypustka = grubość dna');
+});
 ok('wymiary ścianek z wymiaru zewnętrznego i sposobu zginania', () => {
   const dims = fold => { const b = { P: { S: 60, W: 100, G: 40, t: 10, fold }, panels: C.boxTemplate('tuck') }; const r = C.buildBox(b); return b.panels.filter(p => p.kind === 'wall').map(p => r.dims[p.id].ext || r.dims[p.id].w + 'x' + r.dims[p.id].h).join(' '); };
   assert.strictEqual(dims('crease'), '55x90 30 50 20 20 20');
