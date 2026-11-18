@@ -224,9 +224,10 @@ function guessType(src){
   if(/cut|ci[eę]c|n[oó][zż]|kontur|die|stanz|wykr/.test(s))return 'cut';
   var m=/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/.exec(s);
   if(m){var r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16);
-    if(b>130&&r>130&&g<110)return 'kiss';
-    if(b>130&&b>r+50&&b>g+30)return 'crease';
-    if(g>110&&g>r+50&&g>b+40)return 'perf';}
+    /* Kolor bez nazwy warstwy. Sprawdzone na plikach z Pacdory (czerwony cięcie, zielony i niebieski big) i od klientów
+       (magenta = CutContour, czyli cięcie; cyjan = big). Nacinanie i perforację rozpoznaję tylko po nazwie warstwy — kolor jest tu zbyt niejednoznaczny. */
+    if(g>110&&g>r+50&&g>b+40)return 'crease';
+    if(b>130&&b>r+50&&b>g+30)return 'crease';}
   return 'cut';
 }
 
@@ -469,6 +470,12 @@ function boxTemplate(name){
         get=function(id){return ps.filter(function(q){return q.id===id;})[0];};
     T(1,'t');D(s1,'a',false);D(s2,'a',true);
     if(name==='tuckR'){T(bk,'b');D(s1,'b',true);D(s2,'b',false);get(bk).underE={a:1};get(bk).notch=['a'];get(1).underE={b:1};get(1).notch=['b'];}
+    else if(name==='auto'){
+      /* dno automatyczne: klapy A na przodzie i tyle, B na bokach; bigi dna bez cofania (klapy składają się razem z pudełkiem) */
+      ps.push({id:n++,kind:'crashA',parent:1,edge:'b',ext:{base:'G',mul:0.7,kt:0}});
+      ps.push({id:n++,kind:'crashA',parent:bk,edge:'b',ext:{base:'G',mul:0.7,kt:0}});
+      [s1,s2].forEach(function(w){ps.push({id:n++,kind:'crashB',parent:w,edge:'b',ext:{base:'G',mul:0.5,kt:0}});});
+    }
     else if(name==='snap'){
       /* dno 1-2-3: klapy boczne zaginają się pierwsze (big cofnięty o 2 grubości), potem tylna z półokrągłym wycięciem (o 1), na końcu przednia z językiem */
       ps.push({id:n++,kind:'snapF',parent:1,edge:'b',ext:{base:'G',mul:0.4,kt:0}});
@@ -588,7 +595,7 @@ function buildBox(box){
     if(!ch){freeEdge(p,key,F,r0,r1);return;}
     if(ch.kind==='tab'){place(ch,F,0,0);return;}
     /* klapki odsuwają się od krawędzi o wielokrotność grubości; klapka leżąca pod inną warstwą ma big cofnięty w głąb ścianki */
-    var ins=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
+    var ins=(ch.kind==='wall'||ch.kind==='crashA'||ch.kind==='crashB')?0:Math.min(Math.max(0,(ch.gap&&ch.gap.kt!=null?ch.gap.kt:1)*P.t),F.len*0.2);
     var sk=ch.kind==='wall'?0:Math.min(Math.max(0,(ch.sink&&ch.sink.kt!=null?ch.sink.kt:(ch.kind==='dust'?1:0))*P.t),F.len*0.3);
     var lk=ch.kind==='tuck'&&ch.lock?Math.min(Math.max(ch.lock,ins+1),(F.len-2*ins)*0.25):0,L=[pt(F,0,0)],R=[];
     /* zamek szczelinowy: nacięcie zaczyna się na krawędzi wieczka, biegnie równolegle do bigu, ale odsunięte o grubość w stronę zakładki,
@@ -637,6 +644,22 @@ function buildBox(box){
       else{var tl=p.tongue!=null?p.tongue:Math.min(10,sp*0.15),rt=Math.min(3,tl*0.5,tw*0.25),kt2=0.5523*rt,x0=m-tw/2,x1=m+tw/2,ye=ext+tl;
         o.push(q(x0,ext),q(x0,ye-rt),cv(q(x0+rt,ye),q(x0,ye-rt+kt2),q(x0+rt-kt2,ye)),q(x1-rt,ye),cv(q(x1,ye-rt),q(x1-rt+kt2,ye),q(x1,ye-rt+kt2)),q(x1,ext));}
       o.push(q(L1-cc,ext),q(L1,ext-cc),q(L1,0));emit('cut',o,p.id+'/out');out.polys[p.id]=[q(L0,0),q(L0,ext),q(L1,ext),q(L1,0)];
+    }else if(p.kind==='crashA'||p.kind==='crashB'){
+      /* Dno automatyczne (crash-lock), wg wzorca 51×51×31: dwie klapy A na ściankach szerokości, dwie B na bokach.
+         A: big ukośny 45° od rogu do środka dna (głębokość dna / 2), za nim trójkąt klejony do klapy B sąsiada; z drugiej strony język zamka
+            o głębokości 0,7 × głębokość dna, oddzielony wycięciem V (pion + 45°); bok przy języku zbiega pod 5°, bok przy trójkącie cofnięty o grubość z małym odciążeniem przy rogu bigu.
+         B: sięga do środka dna (ext = głębokość/2), bok od strony trójkąta sąsiada pod 20°, drugi pod 45°. flip zamienia strony. */
+      var e=ext,t=P.t,Ac=function(a){return p.flip?len-a:a;},g=function(a,b){return q(Ac(a),b);},cvA=function(E,c1,c2){return {x:E.x,y:E.y,c1x:c1.x,c1y:c1.y,c2x:c2.x,c2y:c2.y};};
+      if(p.kind==='crashA'){
+        var Dd=exprVal({base:'G',kt:0},P,2),hh=Math.min(Dd/2,len*0.6,e*0.9),xA=len-hh,hk=e-hh,rA=Math.min(5,hk*0.5,xA*0.2),tl=Math.tan(5*Math.PI/180)*e,kA=0.5523*rA;
+        var Ra=cvA(g(xA,e-rA),g(xA-rA+kA,e),g(xA,e-rA+kA));
+        emit('cut',[g(0,0),g(tl,e),g(xA-rA,e),Ra,g(xA,hh),g(Math.min(xA+hk,len-t-0.5),e),g(len-t,e),g(len-t,1.5*t),g(len-1.5*t,t),g(len-0.5*t,0),g(len,0)],p.id+'/out');
+        emit('crease',[g(len-1.25*t,1.25*t),g(xA,hh)],p.id+'/D');
+      }else{
+        var s20=Math.tan(20*Math.PI/180)*e;
+        emit('cut',[g(0,0),g(Math.min(s20,len*0.4),e),g(Math.max(len-e,len*0.45),e),g(len,0)],p.id+'/out');
+      }
+      out.polys[p.id]=[q(0,0),q(0,e),q(len,e),q(len,0)];
     }else if(p.kind==='dust'&&p.shape==='round'){
       /* klapka zaokrąglona: prosty bok z zaokrąglonym rogiem od strony wieczka (początek krawędzi), z drugiej ćwierć elipsy schodząca do rogu bigu; flip zamienia strony */
       var spR=L1-L0,rc=Math.min(spR*0.22,ext*0.4),aE=L1-rc,kk=0.5523,Ar=function(a){return p.flip?a:L0+L1-a;},gr=function(a,b){return q(Ar(a),b);},cvr=function(e,c1,c2){return {x:e.x,y:e.y,c1x:c1.x,c1y:c1.y,c2x:c2.x,c2y:c2.y};};
@@ -747,4 +770,4 @@ function buildBox(box){
   return out;
 }
 function pointInPoly(pl,x,y){var c=false;for(var i=0,j=pl.length-1;i<pl.length;j=i++){var a=pl[i],b=pl[j];if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c;}return c;}
-if(typeof module!=='undefined')module.exports={unionOutline:unionOutline,removeSpikes:removeSpikes,nearestOnPath:nearestOnPath,polysOverlap:polysOverlap,moveNode:moveNode,movePath:movePath,boxTemplate:boxTemplate,buildBox:buildBox,exprVal:exprVal,pointInPoly:pointInPoly,axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};
+if(typeof module!=='undefined')module.exports={guessType:guessType,unionOutline:unionOutline,removeSpikes:removeSpikes,nearestOnPath:nearestOnPath,polysOverlap:polysOverlap,moveNode:moveNode,movePath:movePath,boxTemplate:boxTemplate,buildBox:buildBox,exprVal:exprVal,pointInPoly:pointInPoly,axisCuts:axisCuts,stretchAxis:stretchAxis,scaleAxis:scaleAxis,parseD:parseD,builder:builder,parseDXF:parseDXF,writeDXF:writeDXF,writePDF:writePDF,writeSVG:writeSVG,pdfOpsToPaths:pdfOpsToPaths,samplePaths:samplePaths,layoutSheet:layoutSheet,jobItems:jobItems,markList:markList,bboxOf:bboxOf,orderPaths:orderPaths,pathLength:pathLength,joinPaths:joinPaths,splitAt:splitAt,deleteNode:deleteNode,parseTransform:parseTransform,pathD:pathD,flattenPath:flattenPath};

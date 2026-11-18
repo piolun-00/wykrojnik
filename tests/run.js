@@ -143,6 +143,27 @@ ok('nowy obrys zgadza się ze starym tam, gdzie stary był poprawny (szablony be
     assert.ok(Math.abs(len(mk(false)) - len(mk(true))) < 0.01, tpl + '/' + tt + '/' + fold);
   }
 });
+ok('dno automatyczne (crash-lock) wg wzorca 51×51×31: big ukośny 45° do środka dna, język 0,7 × głębokość, klapa prosta do środka dna', () => {
+  for (const tt of [0.3, 0.45, 1.5]) for (const fold of ['crease', 'vin', 'vout']) {
+    const b = { P: { S: 51, W: 31, G: 51, t: tt, fold }, panels: C.boxTemplate('auto') }, r = C.buildBox(b), id = tt + '/' + fold;
+    assert.strictEqual(r.method, 'union', id); assert.strictEqual(r.paths.filter(p => p.type === 'cut' && p.closed).length, 1, id);
+    const diag = r.paths.filter(p => p.fold && Math.abs(Math.abs(p.pts[1].x - p.pts[0].x) - Math.abs(p.pts[1].y - p.pts[0].y)) < 1e-6 && Math.abs(p.pts[1].x - p.pts[0].x) > 5);
+    assert.strictEqual(diag.length, 2, id + ' dwa bigi ukośne pod 45°');
+    const A = b.panels.filter(p => p.kind === 'crashA'), B = b.panels.filter(p => p.kind === 'crashB');
+    assert.strictEqual(A.length, 2); assert.strictEqual(B.length, 2);
+    A.forEach(p => assert.ok(Math.abs(r.dims[p.id].ext - 0.7 * 51) < 1e-9, id)); B.forEach(p => assert.ok(Math.abs(r.dims[p.id].ext - 25.5) < 1e-9, id));
+    // koniec bigu ukośnego leży na głębokości połowy dna (licząc od bigu dna)
+    const yb = Math.max(...r.paths.filter(p => p.fold && Math.abs(p.pts[0].y - p.pts[1].y) < 1e-9 && Math.abs(p.pts[0].x - p.pts[1].x) > 40).map(p => p.pts[0].y));
+    const G2 = C.exprVal({ base: 'G', kt: 0 }, b.P.h != null ? b.P : Object.assign({ h: { crease: 0.5, vin: 0, vout: 1 }[fold] * tt }, b.P), 2) / 2;
+    diag.forEach(d => assert.ok(Math.abs(Math.max(d.pts[0].y, d.pts[1].y) - yb - G2) < 0.01, id + ' głębokość końca bigu ' + (Math.max(d.pts[0].y, d.pts[1].y) - yb) + ' vs ' + G2));
+  }
+});
+ok('kolory linii z importu: Pacdora (czerwony/zielony/niebieski) i CutContour (magenta)', () => {
+  const T = C.guessType;
+  assert.strictEqual(T('#ff3518'), 'cut'); assert.strictEqual(T('#29a247'), 'crease'); assert.strictEqual(T('#39c1ee'), 'crease');
+  assert.strictEqual(T('#fb3199'), 'cut'); assert.strictEqual(T('#00b9f2'), 'crease'); assert.strictEqual(T('#2c2e35'), 'cut');
+  assert.strictEqual(T('wypełnienie #2c2e35'), 'ignore'); assert.strictEqual(T('Kiss cut'), 'kiss'); assert.strictEqual(T('perforacja'), 'perf');
+});
 // ---- interfejs
 const { JSDOM, VirtualConsole } = require('jsdom');
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<link[^>]*>/g, '')
@@ -176,7 +197,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-mi="0"]').click();
     assert.ok(g('pv-ext').textContent.includes('39,8'), g('pv-ext').textContent); assert.strictEqual(d.querySelectorAll('.plus').length, 9);
     d.querySelector('[data-under="1"]').click(); d.querySelector('[data-notch="a"]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
-    assert.strictEqual(d.querySelectorAll('#menu .menu__sub').length, 3); pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-mi="1"][data-si="1"]').click();
+    assert.strictEqual(d.querySelectorAll('#menu .menu__sub').length, 4); pe(d.querySelector('[data-plus="1:l"]'), 'pointerdown', 5, 5); d.querySelector('#menu [data-mi="1"][data-si="1"]').click();
     assert.strictEqual(g('subWall').textContent, 'zakładka'); assert.strictEqual(d.querySelector('[data-lock="10"]').getAttribute('aria-pressed'), 'true'); d.querySelector('[data-rad="8"]').click();
     d.querySelector('[data-setkind=dust]').click(); d.querySelector('[data-shape=shoulder]').click(); d.querySelector('[data-flip]').click(); key('Delete'); assert.strictEqual(d.querySelectorAll('.plus').length, 7);
   });
